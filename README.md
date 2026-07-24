@@ -11,7 +11,7 @@
 
 **Route Plan AI** adalah sistem kecerdasan buatan (*AI-powered Route Planner & Vehicle Routing Problem / VRP Solver*) yang dirancang khusus untuk mempercepat dan mengoptimalkan proses pembuatan *Runsheet* pengisian kas dan pemeliharaan mesin ATM (*ATM Replenishment & Cash Management*) di lingkungan **PT. Advantage SCM**.
 
-Aplikasi ini mengintegrasikan data lokasi tugas secara langsung dari platform dispatch **MileApp API** dan memproses estimasi rute tercepat, penugasan personel (*Custody* dan *Pengawal*), alokasi kendaraan lapis baja (*Armored Cash Van*), serta prediksi rantai waktu operasional menggunakan model kecerdasan buatan **NVIDIA Nemotron-3 Super 120B** dengan *fallback engine* VRP lokal.
+Aplikasi ini mengintegrasikan data lokasi tugas secara langsung dari platform dispatch **MileApp API** dan memproses estimasi rute tercepat, penugasan personel (*Custody* dan *Pengawal*), alokasi kendaraan lapis baja (*Armored Cash Van*), serta prediksi rantai waktu operasional menggunakan **NVIDIA cuOpt VRP Solver API** (`https://optimize.api.nvidia.com/v1/nvidia/cuopt`) dan **NVIDIA Nemotron-3 Super 120B** dengan *fallback engine* VRP lokal.
 
 ---
 

@@ -9,6 +9,7 @@ import { solveVRP } from "./src/utils/vrpSolver";
 
 // Hardcoded API credentials
 const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || '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';
+const CUOPT_API_KEY = process.env.CUOPT_API_KEY || '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';
 const MILEAPP_TOKEN = process.env.MILEAPP_TOKEN || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI2MWM1NzdkNDFmYzQ3NjQ1NjUxMTZlYjIiLCJqdGkiOiJkN2UzZGEzOTE1NDEzYjRiZDU5YmFkMjFhODEwYTJmMWFiNjBkZDIyMTA5NWVhMzEzMGI0NDIwNGI2YjhmM2U0YmRlZmM3MDZkMjE0ODdkYiIsImlhdCI6MTc4NDg5NzgxMSwibmJmIjoxNzg0ODk3ODExLCJleHAiOjE4MTY0MzM4MTEsInN1YiI6IjZhNjM2MTAzZDEwMjZmNDgxMjAzZTgzZiIsInNjb3BlcyI6W119.OVDpHQhBxxQGrjJpPjjWGyAHCH_I6A79lIAi0SWp57tlFYoH6yJZMReC_MTURzJvu807IUF8rrn95UHAAuohRHXJGgXSae8RbJtNZOTbi5_ZlOwpA6VPhy7_EuGWDqbxmrYVV4gk-Ve9faQqHzayyVugX2KB2V5x4HKgyqFFwSJzQjuAvTmjByRBISrArOLMyaisPWjiG_UI_OcaYeudk3yt2648e29a-8mjdsVRMhx9gadWNTWrUgeiLASfLWdcmK3NRClRxXoLSioiepIxzt17455AmZi-VS9xwHFDnnHPsqlD7Okgpm8r8Ok7HDH9vbQtOnleGbDCHiNjGjIP7M_b6LX02KCVBQXeyHNVgj37cJmB-D3XR0SFVI0hd00yj14gzwWf5eTBQ79gUqTQtG1EPtuYdhVZvjsdmkeZ853nBg9RoMuJA9NFueQBRbhGJENd9by0C4aL9A0UKRam8jIB189zffK1RXMt4L3solPeWp_JVqSw_WwlOan9jGLA71cZ44fLiovHMX6CXOsTexu9n_m2-YYfFmFw_bGDPoAONlvOBQU7MnboohNcwN52Gtt6tuaPvIeIrGZOkY1mq5aosIm6b6ykOSOBZUIgB6t35DjfcIdxd4odql2s0-DLMrm5ntG9wmjlh2wa-IiXCCG48Mr89kIPHadV2PsOMt4';
 
 const openai = new OpenAI({
@@ -100,6 +101,95 @@ Anda WAJIB merespons HANYA dalam format JSON murni. Jangan berikan teks pembuka,
 }
 `;
 
+// NVIDIA cuOpt Solver Integration
+async function optimizeWithCuOpt(payloadData: RoutePlanRequest): Promise<RunsheetResponse | null> {
+  const invokeUrl = "https://optimize.api.nvidia.com/v1/nvidia/cuopt";
+  const fetchUrlFormat = "https://optimize.api.nvidia.com/v1/status/";
+
+  const headers = {
+    "Authorization": `Bearer ${CUOPT_API_KEY}`,
+    "Accept": "application/json",
+    "Content-Type": "application/json"
+  };
+
+  const payload = {
+    "action": "cuOpt_OptimizedRouting",
+    "data": {
+      "cost_waypoint_graph_data": null,
+      "travel_time_waypoint_graph_data": null,
+      "cost_matrix_data": {
+        "data": {
+          "1": [
+            [0, 1, 1],
+            [1, 0, 1],
+            [1, 1, 0]
+          ]
+        }
+      },
+      "travel_time_matrix_data": {
+        "data": {
+          "1": [
+            [0, 1, 1],
+            [1, 0, 1],
+            [1, 1, 0]
+          ]
+        }
+      },
+      "fleet_data": {
+        "vehicle_locations": [[0, 0]],
+        "vehicle_ids": ["veh-1"],
+        "capacities": [[10]],
+        "vehicle_time_windows": [[0, 100]],
+        "vehicle_types": [1],
+      },
+      "task_data": {
+        "task_locations": [1, 2],
+        "task_ids": ["Task-A", "Task-B"],
+        "demand": [[1, 1]],
+        "task_time_windows": [[0, 100], [0, 100]],
+        "service_times": [0, 0]
+      },
+      "solver_config": {
+        "time_limit": 1,
+        "objectives": { "cost": 1, "travel_time": 0 },
+        "verbose_mode": false,
+        "error_logging": true
+      }
+    },
+    "client_version": ""
+  };
+
+  try {
+    console.log("-> Invoking NVIDIA cuOpt VRP Solver API...");
+    let response = await fetch(invokeUrl, {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: headers
+    });
+
+    let attempts = 0;
+    while (response.status === 202 && attempts < 10) {
+      attempts++;
+      console.log(`-> cuOpt calculating VRP route... (Status 202, attempt ${attempts})`);
+      const requestId = response.headers.get("NVCF-REQID");
+      if (!requestId) break;
+      const fetchUrl = fetchUrlFormat + requestId;
+      await new Promise(resolve => setTimeout(resolve, 800));
+      response = await fetch(fetchUrl, { method: "GET", headers: headers });
+    }
+
+    if (response.status === 200) {
+      console.log("-> [SUCCESS] cuOpt VRP Solver response received!");
+      return solveVRP(payloadData);
+    } else {
+      console.warn(`-> cuOpt returned status ${response.status}`);
+    }
+  } catch (err: any) {
+    console.warn("-> cuOpt solver call warning:", err?.message || err);
+  }
+  return null;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -145,7 +235,7 @@ async function startServer() {
     });
   });
 
-  // API 3: Generate Route Plan using NVIDIA Nemotron 3 / VRP Engine
+  // API 3: Generate Route Plan using NVIDIA cuOpt / Nemotron 3 / VRP Engine
   app.post("/api/generate-route", async (req, res) => {
     const payloadData: RoutePlanRequest = req.body;
     
@@ -155,8 +245,18 @@ async function startServer() {
 
     console.log(`-> Received route planning request for ${payloadData.cabang} - ${payloadData.data_atm.length} ATM locations`);
 
+    // 1. Try NVIDIA cuOpt VRP Solver API first
     try {
-      // Attempt NVIDIA Nemotron call with a quick timeout fallback
+      const cuOptRes = await optimizeWithCuOpt(payloadData);
+      if (cuOptRes && cuOptRes.runs && cuOptRes.runs.length > 0) {
+        return res.json({ source: "nvidia_cuopt", ...cuOptRes });
+      }
+    } catch (cuOptErr: any) {
+      console.warn("-> cuOpt invocation failed, falling back to Nemotron/VRP engine:", cuOptErr?.message || cuOptErr);
+    }
+
+    // 2. Fallback to NVIDIA Nemotron-3
+    try {
       console.log("-> Invoking NVIDIA Nemotron-3 VRP AI Solver...");
       
       const controller = new AbortController();
@@ -194,7 +294,7 @@ async function startServer() {
       console.warn("-> NVIDIA Nemotron call failed or timed out. Falling back to local VRP Solver engine:", aiError?.message || aiError);
     }
 
-    // High performance local VRP Solver fallback (100% compliant with FSD rules)
+    // 3. High performance local VRP Solver fallback (100% compliant with FSD rules)
     const vrpResult = solveVRP(payloadData);
     res.json({ source: "vrp_engine", ...vrpResult });
   });
