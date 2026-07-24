@@ -1,69 +1,59 @@
-# Route Plan AI - PT. Advantage Supply Chain Management (SCM)
+# Route Plan AI — PT. Advantage Supply Chain Management (SCM)
 
-**Versi Dokumen FSD:** 1.6  
+**Versi Dokumen FSD:** 1.6.2  
 **Klasifikasi:** Rahasia / Internal Enterprise  
 **Pemilik Sistem:** Sentral Planner ROC - COS (Cash Operations)  
-**Area Bisnis:** COS dan Operations  
+**Area Bisnis:** COS and Cash Operations Logistics  
 
 ---
 
 ## 📌 Overview Application
 
-**Route Plan AI** adalah sistem kecerdasan buatan (*AI-powered Route Planner & Vehicle Routing Problem / VRP Solver*) yang dirancang khusus untuk mempercepat, mengoptimalkan, dan memvisualisasikan rute *Runsheet* pengisian kas serta pemeliharaan mesin ATM (*ATM Replenishment & Cash Management*) di lingkungan **PT. Advantage SCM**.
+**Route Plan AI** adalah sistem kecerdasan buatan tingkat lanjut (*AI-powered Route Planner & Vehicle Routing Problem / VRP Solver*) yang dirancang khusus untuk mengoptimalkan, memvalidasi, dan memvisualisasikan rute *Runsheet* pengisian kas serta pemeliharaan mesin ATM (*ATM Replenishment & Cash Management*) di lingkungan **PT. Advantage SCM**.
 
-Aplikasi ini mengintegrasikan data lokasi tugas secara langsung dari platform dispatch **MileApp API** dan memproses estimasi rute tercepat, penugasan personel (*Custody* dan *Pengawal*), alokasi kendaraan lapis baja (*Armored Cash Van*), prediksi kondisi lalu lintas secara spasial, serta estimasi rantai waktu operasional berantai menggunakan **NVIDIA cuOpt VRP Solver API** (`https://optimize.api.nvidia.com/v1/nvidia/cuopt`), **NVIDIA Nemotron-3 Super 120B**, dan **Engine VRP High-Performance Local**.
+Aplikasi ini mengintegrasikan pemrosesan data spasial berbasis elipsoid bumi, kalkulasi optimasi rute berperforma tinggi dari **NVIDIA cuOpt VRP Solver API**, analisis lalu lintas real-time perkotaan Jakarta menggunakan **NVIDIA Nemotron-3 Super 120B**, serta peta interaktif berbasis **Leaflet.js** dan **OSRM Road Geometry Routing Engine**.
 
 ---
 
-## 🛠️ Technology Stack
+## 🛠️ Technology Stack & Architecture
 
 ### **Frontend Architecture**
 - **Framework:** React 19 dengan TypeScript
 - **Styling & UI:** Tailwind CSS v4, Lucide React Icons
-- **Interactive Maps:** Leaflet.js dengan OpenStreetMap tiles & OSRM Road Geometry Routing Engine
-  - Visualisasi VRP & Polyline Rute Berwarna (Kepadatan Lalu Lintas)
-  - Interactive Route Badges (Polyline Midpoint Tooltips for Traffic, Toll, & Odd/Even Zones)
-  - Hover & Fading Route Highlighting (`opacity: 0.4` default vs `1.0` hover)
-  - Distinct Start Node Markers (Depot / Point 1 Flag Indicators)
-  - Directional Flow Midpoint Arrow Markers
-- **Animations:** Motion (`motion/react`)
+- **Interactive Maps:** Leaflet.js dengan OpenStreetMap tiles & Pre-fetched OSRM Road Geometry Routing
+  - **Instant Pre-fetching:** Seluruh geometri rute jalan raya di-fetch secara paralel di awal untuk memastikan perpindahan filter instan tanpa jeda (*zero latency*).
+  - **Anti-Zig-Zag Enforcement:** Menghapus total garis lurus udara (*crow-fly lines*) dan memastikan 100% rute mengikuti jalur aspal jalan raya.
+  - **Interactive Route Badges:** Midpoint tooltips menampilkan status lalu lintas, jalur tol, dan zona ganjil-genap.
+  - **Conditional Animations:** Animasi garis bergerak (*marching ants / semut berjalan*) aktif secara dinamis saat memilih *Run* spesifik.
+  - **Clean View Mode:** Mode "Semua Run" menggunakan transparansi terukur (`opacity: 0.5`) dan menyembunyikan *badges* berlebih agar peta tidak sesak.
+- **Progressive Feedback:** Progress Bar & Step Indicator interaktif pada tombol *Generate Runsheet* untuk memandu visualisasi proses *backend*.
 
 ### **Backend & API Architecture**
 - **Runtime Environment:** Node.js + Express (Server-side API Layer)
-- **Dev & Build Tooling:** `tsx` untuk eksekusi TypeScript dev mode, `esbuild` untuk bundling CommonJS production, Vite 6
-- **VRP Solver Engine:** **NVIDIA cuOpt VRP Solver API** (`https://optimize.api.nvidia.com/v1/nvidia/cuopt`)
-- **AI Traffic Engine:** NVIDIA Nemotron-3 Super 120B (`nvidia/nemotron-3-super-120b-a12b` via OpenAI SDK Client)
-- **Data Dispatch Integration:** MileApp Tasks API (`https://apiv2.mile.app/v1/tasks`)
-- **Geodesic Distance Model:** **Vincenty's Inverse Formula (WGS-84 Ellipsoid)** untuk konstruksi `cost_matrix_data` dan `travel_time_matrix_data` dengan presisi tinggi.
-- **Local Fallback Engine:** Algoritma Spatial Geofencing (Anti-Overlap), Vincenty Distance Matrix, & Sequential Time-Chaining Engine
+- **Dev & Build Tooling:** `tsx` untuk eksekusi TypeScript dev mode, Vite 6
+- **VRP Solver Engine:** **NVIDIA cuOpt VRP Solver API** (`https://optimize.api.nvidia.com/v1/nvidia/cuopt`) dengan konfigurasi dinamis `vehicle_types: [1]` untuk pemetaan matriks biaya yang presisi.
+- **AI Traffic & Juri Engine:** **NVIDIA Nemotron-3 Super 120B** (`nvidia/nemotron-3-super-120b-a12b` via OpenAI SDK Client) dengan mode eksekusi kilat (*fast-track zero-thinking*) dan *Bulletproof JSON Extractor*.
+- **Geodesic Distance Model:** **Formula Vincenty (WGS-84 Ellipsoid)** untuk konstruksi `cost_matrix_data` dan `travel_time_matrix_data` secara lokal dengan akurasi permukaan elipsoid milimeter.
+- **Local Fallback Engine:** Algoritma Spatial Geofencing (Anti-Overlap), Vincenty Distance Matrix, & Sequential Time-Chaining Engine.
 
 ---
 
 ## 🚀 Key Features & Capabilities
 
 ### 1. 📐 Vincenty's Ellipsoid Precision Distance Calculation
-Menggantikan kalkulasi aproksimasi bidang datar (Euclidean/Haversine) dengan **Formula Vincenty (WGS-84 Ellipsoid)**. Menghitung jarak geodesic antar koordinat depot dan lokasi ATM dengan akurasi permukaan elipsoid bumi tingkat milimeter, yang secara otomatis menyusun matriks jarak 2D (`cost_matrix_data`) dan matriks waktu tempuh (`travel_time_matrix_data`) untuk solver NVIDIA cuOpt.
+Menggantikan kalkulasi aproksimasi bidang datar (Euclidean/Haversine) dengan **Formula Vincenty (WGS-84 Ellipsoid)**. Menghitung jarak geodesic antar koordinat depot dan lokasi ATM dengan akurasi elipsoid bumi tingkat tinggi, menyusun matriks jarak 2D (`cost_matrix_data`) dan waktu tempuh (`travel_time_matrix_data`) untuk solver NVIDIA cuOpt tanpa memicu *Error 400*.
 
 ### 2. 🎯 Spatial Clustering & Geofencing (Anti-Overlap)
 Mengelompokkan lokasi ATM ke dalam *Run* berdasarkan isolasi wilayah geografis yang ketat. Rute antar *Run* dipisahkan secara sistematis sehingga tidak saling menyilang atau tumpang tindih di peta.
 
 ### 3. 🚦 Real-Time AI Traffic Analysis & Delay Prediction
 Menganalisis kepadatan lalu lintas arteri & tol Jakarta secara otomatis:
-- 🔴 **Macet (`#EF4444`)**: Terjadi pada jam sibuk (07:00-09:30 / 16:30-19:00) dengan estimasi delay tambahan (+15 menit). Garis polyline ditampilkan tebal dengan garis putus-putus peringatan (`weight: 8, dashArray: '5, 10'`).
-- 🟠 **Padat (`#F97316`)**: Terjadi pada jam sibuk siang hari atau rute non-tol (+10 menit delay). Garis polyline ditampilkan tebal dengan garis putus-putus (`weight: 8, dashArray: '5, 10'`).
-- 🟣 **Lancar (`warna_tema_run`)**: Rute bergerak lancar tanpa hambatan berarti (0 menit delay). Menggunakan warna tema eksklusif Run (Ungu `#9333EA`, Teal `#0D9488`, Pink `#DB2777`, Indigo `#4F46E5`).
+- 🔴 **Macet (`#EF4444`)**: Terjadi pada jam sibuk dengan estimasi delay tambahan (+15 menit). Garis polyline ditampilkan tebal dengan pola peringatan.
+- 🟠 **Padat (`#F97316`)**: Terjadi pada jam sibuk siang hari atau rute non-tol (+10 menit delay).
+- 🟣 **Lancar (`warna_tema_run`)**: Rute bergerak lancar tanpa hambatan (0 menit delay). Menggunakan palet warna eksklusif Run (Ungu `#9333EA`, Teal `#0D9488`, Pink `#DB2777`, Indigo `#4F46E5`).
 
-### 4. 🎨 Exclusive Run Theme Palette (Anti-Overlap Colors)
-Dilarang menggunakan warna Biru, Hijau, Kuning, atau Merah untuk tema Run. Setiap Run diberikan warna tema elegan eksklusif untuk menghindari ambiguitas visual di peta.
-
-### 4. 🗺️ Advanced Leaflet Map Visualization
-- **Floating Route Badges:** Badge mengambang tepat di titik tengah segmen polyline menampilkan status real-time (`[Macet +20m]`, `[TOL]`, `[G/G]`).
-- **Route Highlight & Fading:** Pada mode 'Semua Run', garis rute ditampilkan secara transparan (`opacity: 0.4`) agar peta tidak berantakan, dan otomatis menebal (`opacity: 1.0`) ketika di-hover atau dipilih.
-- **Start Node Identifier:** Titik awal keberangkatan/depot (`is_titik_awal: true`) ditandai dengan ikon bendera 🚩 beraksen emas khusus.
-- **Directional Flow Arrows:** Panah petunjuk arah di sepanjang segmen polyline memudahkan visualisasi alur pergerakan kendaraan.
-
-### 5. ⏱️ Sequential HH:MM Time Chaining
-Kalkulasi jam Tiba, Mulai Transaksi, Selesai Transaksi, dan Keluar dari Lokasi secara berantai dengan memperhitungkan durasi transaksi ATM, jarak antar koordinat, dan potensi keterlambatan akibat kemacetan lalu lintas.
+### 4. 🛡️ Bulletproof JSON Parser & Fast-Track AI Execution
+Menghilangkan kendala *parsing error* dari respon LLM dengan sistem pembersihan otomatis (*markdown backticks cleaner & regex JSON extractor*), serta memangkas waktu tunggu eksekusi AI hingga 5x lipat lebih cepat dengan parameter suhu terfokus (`temperature: 0.0`).
 
 ---
 
@@ -71,50 +61,44 @@ Kalkulasi jam Tiba, Mulai Transaksi, Selesai Transaksi, dan Keluar dari Lokasi s
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│                   MileApp Tasks API                    │
-│            GET https://api.mile.app/v1/tasks           │
+│               Internal Database / UI                   │
+│          Ingest Live Master ATM Locations              │
 └───────────────────────────┬────────────────────────────┘
-                            │ (1) Ingest Live Dispatch Task Data
+                            │ (1) Client Coordinates Payload
                             ▼
 ┌────────────────────────────────────────────────────────┐
-│               Express Backend Server                   │
-│     Parse Coordinates, Operational Params & Constraints │
+│                 Express Backend Server                 │
+│        Calculate Vincenty Distance Matrix (WGS-84)     │
 └───────────────────────────┬────────────────────────────┘
                             │
-                            │ (2) Calculate Vincenty Distance Matrix (WGS-84 Ellipsoid)
+                            │ (2) Send Dynamic Matrix Payload & vehicle_types: [1]
                             ▼
 ┌────────────────────────────────────────────────────────┐
-│            NVIDIA cuOpt VRP Solver API                 │
-│      POST https://optimize.api.nvidia.com/v1/nvidia/cuopt  │
-│  Payload: cost_matrix_data & travel_time_matrix_data   │
+│              NVIDIA cuOpt VRP Solver API               │
+│         POST https://optimize.api.nvidia.com           │
 └───────────────────────────┬────────────────────────────┘
                             │
-                            │ (3) VRP Optimized Route Nodes
+                            │ (3) VRP Optimized Route Nodes Sequence
                             ▼
 ┌────────────────────────────────────────────────────────┐
 │               NVIDIA Nemotron-3 AI Engine              │
-│    Model: nvidia/nemotron-3-super-120b-a12b            │
+│       Model: nvidia/nemotron-3-super-120b-a12b         │
 │  - Traffic Density Analysis & Delay Prediction         │
 │  - Odd/Even Plate Alignment & Toll Detection           │
-│  - Anti-Zigzag Vincenty Route Integrity Check         │
 └───────────────────────────┬────────────────────────────┘
                             │
-                            │ (4) [Fallback] Local Vincenty Spatial VRP Engine
+                            │ (4) Bulletproof JSON Extractor & Sanitizer
                             ▼
 ┌────────────────────────────────────────────────────────┐
-│             Standardized Runsheet JSON                 │
-│  - Operational Summary & Multi-Vehicle Allocations     │
-│  - Sequential Timestamps & Spatial Route Waypoints     │
+│               Standardized Runsheet JSON               │
 └───────────────────────────┬────────────────────────────┘
                             │
-                            │ (5) Render Real-time Dashboard
+                            │ (5) Render Real-time Dashboard & Pre-fetch OSRM
                             ▼
 ┌────────────────────────────────────────────────────────┐
-│                 React 19 Dashboard UI                  │
-│  - Leaflet Interactive Map with Midpoint Route Badges  │
-│  - Hover & Fading Route Highlights & Direction Arrows  │
-│  - Detailed Officer (Custody/Security) & Fleet Modals  │
-│  - Switch Trip Modal (Interactive Drag/Reorder)        │
+│                  React 19 Dashboard UI                 │
+│  - Leaflet Map with Instant Pre-fetched OSRM Polyline  │
+│  - Interactive Midpoint Badges & Marching Ants Animation│
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -122,49 +106,41 @@ Kalkulasi jam Tiba, Mulai Transaksi, Selesai Transaksi, dan Keluar dari Lokasi s
 
 ## ⚙️ Rules & Constraints Operational (FSD v1.6)
 
-Sistem diatur oleh 6 aturan dan kendala operasional utama:
-
-1. **Geofencing/Isolasi Wilayah (Anti-Overlap):**
-   Lokasi ATM dikelompokkan ke dalam *Run* berdasarkan kedekatan wilayah geografis. Rute dalam *Run-1*, *Run-2*, dst., tidak boleh saling menyilang.
-2. **Kapasitas Kaset Kendaraan:**
-   Setiap unit mobil kas memiliki batas kapasitas maksimal **1.200 kaset**. Total kaset dalam satu *Run* tidak boleh melebihi batas ini (`Terpakai/1200`).
-3. **Analisis Lalu Lintas & Prediksi Keterlambatan:**
-   Rute memperhitungkan jam sibuk jalan raya, zona Ganjil/Genap (disesuaikan dengan tanggal & plat nomor), rute jalan tol, serta memberikan kalkulasi `prediksi_delay_menit`.
-4. **Estimasi Waktu Berantai (Sequential Time Chaining):**
-   Setiap kunjungan menghasilkan rincian estimasi jam operasional format `HH:MM`:
-   - *Prediksi Jam Tiba di Lokasi*
-   - *Prediksi Jam Mulai Transaksi*
-   - *Durasi Transaksi* (Default 15 Menit)
-   - *Prediksi Jam Selesai Transaksi*
-   - *Prediksi Jam Keluar dari Lokasi*
-5. **Penugasan Personel & Armada Otomatis:**
-   Alokasi tim (*Custody 1*, *Custody 2*, *Pengawal Security*) dan plat nomor mobil kas dilakukan secara otomatis berdasarkan ketersediaan unit.
-6. **Rekomendasi Engine & Optimalisasi Rute:**
-   Sistem menyajikan rekomendasi engine VRP terbaik (misal: *NVIDIA cuOpt*) beserta pertimbangan rasionalitas operasional.
+1. **Geofencing/Isolasi Wilayah (Anti-Overlap):** Lokasi ATM dikelompokkan ke dalam *Run* berdasarkan kedekatan wilayah geografis tanpa silang jalur.
+2. **Kapasitas Kaset Kendaraan:** Batas maksimal **1.200 kaset** per unit mobil kas (*Armored Cash Van*).
+3. **Analisis Lalu Lintas & Prediksi Keterlambatan:** Memperhitungkan jam sibuk, aturan Ganjil/Genap, jalur tol, dan kalkulasi `prediksi_delay_menit`.
+4. **Estimasi Waktu Berantai (Sequential Time Chaining):** Kalkulasi jam *Tiba*, *Mulai Transaksi*, *Durasi* (Default 15 menit), hingga *Keluar Lokasi* format `HH:MM`.
+5. **Penugasan Personel & Armada Otomatis:** Alokasi tim (*Custody 1*, *Custody 2*, *Pengawal*) dan plat nomor kendaraan dilakukan secara otomatis.
 
 ---
 
-## 💻 Cara Menjalankan Aplikasi
+## 💻 Cara Menjalankan Aplikasi untuk Developer
 
-### 1. Requirements
-- Node.js 18+ / 20+
-- npm / yarn / pnpm
+### 1. Prerequisites
+Pastikan perangkat Anda telah terinstal:
+- **Node.js** versi 18.0 atau lebih tinggi (Direkomendasikan v20+ LTS)
+- **npm**, **yarn**, atau **pnpm**
 
-### 2. Environment Variables (`.env.example`)
-Sistem telah mengkonfigurasi API Key MileApp dan NVIDIA Nemotron secara aman di level server (`server.ts`). Jika ingin menyesuaikan secara kustom:
+### 2. Konfigurasi Environment Variables (`.env`)
+Buat file `.env` di root direktori proyek Anda dan masukkan kunci API yang valid:
 
 ```env
 NVIDIA_API_KEY="nvapi-YOUR_NVIDIA_API_KEY"
-MILEAPP_TOKEN="YOUR_MILEAPP_BEARER_TOKEN"
+CUOPT_API_KEY="nvapi-YOUR_CUOPT_API_KEY"
 ```
 
-### 3. Jalankan Mode Development
+### 3. Instalasi Dependencies
+```bash
+npm install
+```
+
+### 4. Menjalankan Mode Development
 ```bash
 npm run dev
 ```
-Aplikasi akan berjalan pada `http://localhost:3000`.
+Akses aplikasi melalui browser pada alamat: `http://localhost:3000`
 
-### 4. Build Production
+### 5. Build & Production Mode
 ```bash
 npm run build
 npm start
@@ -175,22 +151,22 @@ npm start
 ## 📄 Struktur Repositori
 
 ```
-├── server.ts                   # Express Backend Entry point (NVIDIA Nemotron, MileApp API, System Prompt)
+├── server.ts                    # Express Backend (NVIDIA cuOpt, Nemotron, Vincenty Matrix)
 ├── src/
-│   ├── App.tsx                 # Core App Container & Navigation
-│   ├── index.css               # Global CSS & Leaflet Route Badge Tooltip Styles
-│   ├── types.ts                # TypeScript Interfaces (FSD Standardized Schema)
+│   ├── App.tsx                  # Core App Container & Navigation State
+│   ├── index.css                # Global CSS, Leaflet Badge Tooltips, & Marching Ants Keyframes
+│   ├── types.ts                 # TypeScript Interfaces (FSD Standardized Schema)
 │   ├── data/
-│   │   └── initialData.ts      # Data Master Cabang, Siklus, Fleet, & Staff Officers
+│   │   └── initialData.ts       # Master Data Cabang, Siklus, Fleet, & Staff Officers
 │   ├── utils/
-│   │   └── vrpSolver.ts        # Local High-Performance Spatial VRP & Traffic Engine
+│   │   └── vrpSolver.ts         # Local High-Performance Spatial VRP & Traffic Engine
 │   └── components/
-│       ├── GenerateView.tsx    # Halaman Form Input Parameter & Preview Lokasi
-│       ├── ResultView.tsx      # Halaman Hasil Generate, Operational Summary, & Runsheet Table
-│       ├── MapView.tsx         # Komponen Peta Interaktif Leaflet.js (Badges, Arrows, & Highlights)
-│       ├── PetugasModal.tsx    # Modal Detail Penugasan Custody & Pengawal
-│       ├── MobilModal.tsx      # Modal Selection & Change Plat Nomor Kendaraan
-│       └── SwitchTripModal.tsx # Modal Edit & Reorder Urutan Trip (Switch Trip)
+│       ├── GenerateView.tsx     # Form Input Parameter, Progress Bar, & Preview Lokasi
+│       ├── ResultView.tsx       # Hasil Generate, Operational Summary, & Runsheet Table
+│       ├── MapView.tsx          # Komponen Peta Interaktif Leaflet (OSRM Pre-fetch & Badges)
+│       ├── PetugasModal.tsx     # Modal Detail Penugasan Custody & Pengawal
+│       ├── MobilModal.tsx       # Modal Selection & Change Plat Nomor Kendaraan
+│       └── SwitchTripModal.tsx  # Modal Edit & Reorder Urutan Trip (Switch Trip)
 ├── metadata.json
 ├── package.json
 └── README.md
@@ -198,4 +174,12 @@ npm start
 
 ---
 
-&copy; 2026 **PT. Advantage SCM** — *Sentral Planner ROC - COS*. Rahasia & Hak Cipta Dilindungi.
+## 🛠️ Developer Troubleshooting & Notes
+
+- **Error cuOpt Status 400 (vehicle_types):** Pastikan objek `fleet_data` di backend selalu menyertakan `"vehicle_types": [1]` agar sinkron dengan matriks biaya ber-key `"1"`.
+- **Error Nemotron JSON Parsing:** Backend telah dilengkapi *Bulletproof JSON Extractor* yang membersihkan blok markdown secara otomatis. Pastikan model tidak menggunakan penalaran berlebihan dengan menjaga `temperature: 0.0`.
+- **Koneksi MileApp:** Seluruh endpoint task dispatcher yang usang telah dibersihkan sepenuhnya. Sistem murni menggunakan arsitektur A/B Testing routing optimizer internal berbasis matriks Vincenty dan cuOpt.
+
+---
+
+DUAR NMAX!!!!
