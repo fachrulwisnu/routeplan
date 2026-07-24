@@ -10,3 +10,14 @@
 .custom-route-badge::before {
   display: none !important;
 }
+
+.ant-animation {
+  stroke-dasharray: 12, 12;
+  animation: march 1.5s linear infinite;
+}
+
+@keyframes march {
+  to {
+    stroke-dashoffset: -24;
+  }
+}

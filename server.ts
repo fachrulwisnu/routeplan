@@ -108,11 +108,18 @@ function buildMatrix(atmList: { koordinat: [number, number] }[]): number[][] {
 // 3. ENGINE 1: NVIDIA cuOpt (Cepat & Stabil)
 // =====================================================================
 async function getRoutingFromCuOpt(atmList: { id?: number; plan_no?: string; nama?: string; koordinat: [number, number] }[]) {
-  console.log("-> Mengirim matriks ke NVIDIA cuOpt...");
+  console.log(`-> Mengirim ${atmList.length} lokasi ke NVIDIA cuOpt...`);
   const costMatrix = buildMatrix(atmList);
 
-  const taskLocations = Array.from({ length: atmList.length - 1 }, (_, i) => i + 1);
-  const taskIds = atmList.slice(1).map((a, i) => a.plan_no || `T-${i + 1}`);
+  const taskLocations: number[] = [];
+  const taskIds: string[] = [];
+  const demands: number[][] = [];
+
+  for (let i = 1; i < atmList.length; i++) {
+    taskLocations.push(i);
+    taskIds.push(atmList[i].plan_no || `Task-${i}`);
+    demands.push([10]); // Asumsi butuh 10 kaset per ATM
+  }
 
   const payload = {
     action: "cuOpt_OptimizedRouting",
@@ -126,11 +133,11 @@ async function getRoutingFromCuOpt(atmList: { id?: number; plan_no?: string; nam
         vehicle_time_windows: [[0, 1000]]
       },
       task_data: {
-        task_locations: taskLocations.length > 0 ? taskLocations : [1],
-        task_ids: taskIds.length > 0 ? taskIds : ["T-1"],
-        demand: taskLocations.map(() => [10])
+        task_locations: taskLocations,
+        task_ids: taskIds,
+        demand: demands
       },
-      solver_config: { time_limit: 1 }
+      solver_config: { time_limit: 2 }
     }
   };
 
@@ -152,7 +159,11 @@ async function getRoutingFromCuOpt(atmList: { id?: number; plan_no?: string; nam
       });
     }
 
-    if (response.status !== 200) throw new Error(`Status ${response.status}`);
+    if (response.status !== 200) {
+      const errText = await response.text();
+      throw new Error(`Status ${response.status}: ${errText}`);
+    }
+
     console.log("-> [SUCCESS] cuOpt berhasil mengurutkan!");
     return await response.json();
   } catch (err: any) {
@@ -179,7 +190,7 @@ async function getRoutingFromMileApp(atmList: { koordinat: [number, number] }[])
 // 5. JURI PENILAI (NEMOTRON-3) DIPERCEPAT!
 // =====================================================================
 async function evaluateAndPredict(dataMaster: any, resCuOpt: any, resMile: any) {
-  console.log("-> Nemotron-3 membandingkan rute... (Mohon tunggu)");
+  console.log("-> Nemotron-3 sedang membandingkan rute dan menulis JSON... (Mohon tunggu)");
 
   const payloadToNemotron = { data: dataMaster, opt1_cuopt: resCuOpt, opt2_mileapp: resMile };
 
@@ -188,12 +199,12 @@ async function evaluateAndPredict(dataMaster: any, resCuOpt: any, resMile: any) 
       model: "nvidia/nemotron-3-super-120b-a12b",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Evaluasi rute ini: ${JSON.stringify(payloadToNemotron)}` }
+        { role: "user", content: `Evaluasi rute ini dan kembalikan JSON utuh: ${JSON.stringify(payloadToNemotron)}` }
       ],
-      temperature: 0.0,
+      temperature: 0.1,
       top_p: 0.95,
-      max_tokens: 2048,
-      reasoning_budget: 512,
+      max_tokens: 8192,
+      reasoning_budget: 4096,
       chat_template_kwargs: { enable_thinking: true },
       stream: false
     } as any);
@@ -205,7 +216,7 @@ async function evaluateAndPredict(dataMaster: any, resCuOpt: any, resMile: any) 
     if (!jsonMatch) throw new Error("AI tidak mengembalikan format JSON yang valid.");
 
     const finalJson = JSON.parse(jsonMatch[0]);
-    console.log("-> [SUCCESS] Evaluasi Juri Selesai!\n");
+    console.log("-> [SUCCESS] Evaluasi Juri Selesai, JSON utuh!\n");
 
     // TAMPILKAN PEMENANG DI TERMINAL
     console.log("=========================================");

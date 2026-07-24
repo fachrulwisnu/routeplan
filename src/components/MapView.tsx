@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { Run, VisitStop, ClientATM } from '../types';
 
@@ -24,14 +24,12 @@ const RUN_COLORS = [
 async function fetchRouteOSRM(waypoints: [number, number][]): Promise<[number, number][] | null> {
   if (waypoints.length < 2) return null;
   try {
-    // OSRM expects coordinates formatted as: lon,lat;lon,lat;...
     const coordString = waypoints.map(([lat, lng]) => `${lng},${lat}`).join(';');
     const url = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson`;
     const response = await fetch(url);
     if (!response.ok) return null;
     const data = await response.json();
     if (data.routes && data.routes.length > 0 && data.routes[0].geometry?.coordinates) {
-      // OSRM returns array of [lng, lat], convert to Leaflet [lat, lng]
       return data.routes[0].geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]);
     }
   } catch (err) {
@@ -51,18 +49,80 @@ export const MapView: React.FC<MapViewProps> = ({
   const mapInstanceRef = useRef<L.Map | null>(null);
   const layersGroupRef = useRef<L.LayerGroup | null>(null);
 
+  // Cache pre-fetched OSRM geometries: key -> coordinate array
+  const [osrmGeometries, setOsrmGeometries] = useState<Record<string, [number, number][]>>({});
+
+  const depotLat = -6.173256;
+  const depotLng = 106.810058;
+
+  // 1. PRE-FETCHING OSRM: Fetch all route geometries concurrently on initial runs receipt
+  useEffect(() => {
+    if (!runs || runs.length === 0) return;
+
+    let isCancelled = false;
+
+    const prefetchGeometries = async () => {
+      const fetchTasks: Promise<{ key: string; coords: [number, number][] | null }>[] = [];
+
+      runs.forEach((run, runIdx) => {
+        const waypoints: [number, number][] = [[depotLat, depotLng]];
+
+        run.rute_kunjungan.forEach((stop) => {
+          const parts = stop.koordinat.split(',').map(s => parseFloat(s.trim()));
+          if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+            waypoints.push([parts[0], parts[1]]);
+          }
+        });
+        waypoints.push([depotLat, depotLng]);
+
+        for (let i = 0; i < waypoints.length - 1; i++) {
+          const fromPt = waypoints[i];
+          const toPt = waypoints[i + 1];
+          const key = `${runIdx}_${i}_${fromPt[0].toFixed(5)},${fromPt[1].toFixed(5)}_${toPt[0].toFixed(5)},${toPt[1].toFixed(5)}`;
+
+          if (!osrmGeometries[key]) {
+            fetchTasks.push(
+              fetchRouteOSRM([fromPt, toPt]).then(coords => ({ key, coords }))
+            );
+          }
+        }
+      });
+
+      if (fetchTasks.length > 0) {
+        const results = await Promise.all(fetchTasks);
+        if (!isCancelled) {
+          setOsrmGeometries(prev => {
+            const updated = { ...prev };
+            results.forEach(({ key, coords }) => {
+              if (coords && coords.length > 0) {
+                updated[key] = coords;
+              }
+            });
+            return updated;
+          });
+        }
+      }
+    };
+
+    prefetchGeometries();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [runs]);
+
+  // 2. RENDER MAP LAYERS
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
     // Initialize Leaflet Map if not already initialized
     if (!mapInstanceRef.current) {
       const map = L.map(mapContainerRef.current, {
-        center: [-6.173256, 106.810058], // Jakarta Cideng Depot
+        center: [depotLat, depotLng], // Jakarta Cideng Depot
         zoom: 13,
         zoomControl: true,
       });
 
-      // Add OpenStreetMap tile layer
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
@@ -91,26 +151,24 @@ export const MapView: React.FC<MapViewProps> = ({
       iconAnchor: [16, 16]
     });
 
-    const depotLat = -6.173256;
-    const depotLng = 106.810058;
     const depotMarker = L.marker([depotLat, depotLng], { icon: depotIcon })
       .bindPopup(`<b>PT. Advantage SCM - Depot Cideng</b><br/>Pusat Distribusi Cash & ATM Replenishment`);
     layerGroup.addLayer(depotMarker);
     bounds.extend([depotLat, depotLng]);
 
-    let isMounted = true;
+    const isSingleRunSelected = selectedRunIndex !== null && selectedRunIndex !== undefined;
 
     // Mode 1: Render Calculated Runs
     if (runs && runs.length > 0) {
       runs.forEach((run, runIdx) => {
-        if (selectedRunIndex !== null && selectedRunIndex !== undefined && selectedRunIndex !== runIdx) {
+        if (isSingleRunSelected && selectedRunIndex !== runIdx) {
           return; // Filter to selected run if specified
         }
 
         const runThemeColor = run.warna_tema_run || RUN_COLORS[runIdx % RUN_COLORS.length];
         const waypoints: [number, number][] = [[depotLat, depotLng]];
 
-        // Group stops by coordinates to handle single-point multi-trips (Fig 7 in FSD)
+        // Group stops by coordinates to handle single-point multi-trips
         const coordMap: { [key: string]: VisitStop[] } = {};
 
         run.rute_kunjungan.forEach((stop) => {
@@ -133,7 +191,6 @@ export const MapView: React.FC<MapViewProps> = ({
 
           let stopIcon: L.DivIcon;
           if (isStartNode) {
-            // Distinct Start Node Icon (Emerald & Gold)
             stopIcon = L.divIcon({
               className: 'custom-start-node-icon',
               html: `<div style="background: linear-gradient(135deg, #10b981, #059669); color: white; border-radius: 50%; padding: 3px 8px; font-size: 11px; font-weight: 800; border: 3px solid #f59e0b; box-shadow: 0 4px 10px rgba(0,0,0,0.4); min-width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; gap: 2px;">
@@ -204,17 +261,14 @@ export const MapView: React.FC<MapViewProps> = ({
         // Add return to depot waypoint
         waypoints.push([depotLat, depotLng]);
 
-        // Determine base opacity: when viewing all runs, opacity is 0.4 for smooth layering; 1.0 when selected
-        const isAllRunsView = selectedRunIndex === null || selectedRunIndex === undefined;
-        const baseOpacity = isAllRunsView ? 0.4 : 1.0;
+        const baseOpacity = isSingleRunSelected ? 1.0 : 0.6;
 
-        // Draw segmented polylines with traffic density colors (#EF4444, #F97316, or runThemeColor) & Midpoint Badges
+        // Draw segmented polylines with pre-fetched OSRM geometry, marching ants animation, & conditional badges
         for (let i = 0; i < waypoints.length - 1; i++) {
           const fromPt = waypoints[i];
           const toPt = waypoints[i + 1];
           const stopData = run.rute_kunjungan[i];
-          
-          // Destination stop (Point B) density color
+
           const densityColor = stopData?.warna_kepadatan || stopData?.warna_jalur || (
             stopData?.status_lalu_lintas === 'Macet' || stopData?.status_lalu_lintas === 'Macet Parah'
               ? '#EF4444'
@@ -227,65 +281,71 @@ export const MapView: React.FC<MapViewProps> = ({
           const isMacet = statusText === 'Macet' || statusText === 'Macet Parah' || densityColor.toUpperCase() === '#EF4444';
           const isPadat = statusText === 'Padat' || densityColor.toUpperCase() === '#F97316' || densityColor.toUpperCase() === '#F59E0B';
 
-          // CSS styling: If Macet/Padat -> weight 8, dashArray '5, 10'. If Lancar -> weight 5, solid.
           const segmentWeight = (isMacet || isPadat) ? 8 : 5;
           const segmentDashArray = (isMacet || isPadat) ? '5, 10' : undefined;
 
-          // Build HTML for Floating Midpoint Route Badge
-          const delayVal = stopData?.prediksi_delay_menit || (isMacet ? 15 : isPadat ? 10 : 0);
-          const delayText = delayVal > 0 ? `+${delayVal}m` : '';
+          // Key for OSRM geometry cache
+          const key = `${runIdx}_${i}_${fromPt[0].toFixed(5)},${fromPt[1].toFixed(5)}_${toPt[0].toFixed(5)},${toPt[1].toFixed(5)}`;
+          const legCoords = osrmGeometries[key] || [fromPt, toPt];
 
-          let badgeBgStyle = `background-color: ${runThemeColor}; color: white;`;
-          let badgeLabel = `🔵 Lancar`;
+          // 2. MARCHING ANTS ANIMATION: Apply .ant-animation class ONLY when a specific run is selected
+          const polylineClassName = isSingleRunSelected ? 'ant-animation' : undefined;
 
-          if (isMacet) {
-            badgeBgStyle = 'background-color: #ef4444; color: white;';
-            badgeLabel = `🔴 Macet ${delayText}`;
-          } else if (isPadat) {
-            badgeBgStyle = 'background-color: #f97316; color: white;';
-            badgeLabel = `🟡 Padat ${delayText}`;
-          }
-
-          const badgeHtml = `
-            <div class="flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md px-2 py-1 rounded-lg shadow-lg border border-slate-700/80 text-[10px] font-extrabold whitespace-nowrap pointer-events-none">
-              <span style="${badgeBgStyle}" class="px-1.5 py-0.5 rounded-md flex items-center gap-1">
-                ${badgeLabel}
-              </span>
-              ${stopData?.is_lewat_tol ? `<span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded-md font-black">[TOL]</span>` : ''}
-              ${stopData?.is_zona_ganjil_genap ? `<span class="bg-amber-600 text-white px-1.5 py-0.5 rounded-md font-black">[G/G]</span>` : ''}
-            </div>
-          `;
-
-          // Baseline fallback polyline for segment
-          const legPolyline = L.polyline([fromPt, toPt], {
+          const legPolyline = L.polyline(legCoords, {
             color: densityColor,
-            weight: segmentWeight,
-            dashArray: segmentDashArray,
+            weight: isSingleRunSelected ? segmentWeight + 2 : segmentWeight,
+            dashArray: isSingleRunSelected ? undefined : segmentDashArray,
             opacity: baseOpacity,
             lineCap: 'round',
-            lineJoin: 'round'
+            lineJoin: 'round',
+            className: polylineClassName
           });
 
-          // Bind Permanent Midpoint Tooltip
-          legPolyline.bindTooltip(badgeHtml, {
-            permanent: true,
-            direction: 'center',
-            className: 'custom-route-badge',
-            interactive: false
-          });
+          // 3. CONDITIONALLY SHOW BADGES: Hide tooltips/badges when 'Semua Run' is active
+          if (isSingleRunSelected) {
+            const delayVal = stopData?.prediksi_delay_menit || (isMacet ? 15 : isPadat ? 10 : 0);
+            const delayText = delayVal > 0 ? `+${delayVal}m` : '';
 
-          // Interactive Hover & Click Highlighting
+            let badgeBgStyle = `background-color: ${runThemeColor}; color: white;`;
+            let badgeLabel = `🔵 Lancar`;
+
+            if (isMacet) {
+              badgeBgStyle = 'background-color: #ef4444; color: white;';
+              badgeLabel = `🔴 Macet ${delayText}`;
+            } else if (isPadat) {
+              badgeBgStyle = 'background-color: #f97316; color: white;';
+              badgeLabel = `🟡 Padat ${delayText}`;
+            }
+
+            const badgeHtml = `
+              <div class="flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md px-2 py-1 rounded-lg shadow-lg border border-slate-700/80 text-[10px] font-extrabold whitespace-nowrap pointer-events-none">
+                <span style="${badgeBgStyle}" class="px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                  ${badgeLabel}
+                </span>
+                ${stopData?.is_lewat_tol ? `<span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded-md font-black">[TOL]</span>` : ''}
+                ${stopData?.is_zona_ganjil_genap ? `<span class="bg-amber-600 text-white px-1.5 py-0.5 rounded-md font-black">[G/G]</span>` : ''}
+              </div>
+            `;
+
+            legPolyline.bindTooltip(badgeHtml, {
+              permanent: true,
+              direction: 'center',
+              className: 'custom-route-badge',
+              interactive: false
+            });
+          }
+
           legPolyline.on('mouseover', function(this: L.Polyline) {
-            this.setStyle({ opacity: 1.0, weight: segmentWeight + 2 });
+            this.setStyle({ opacity: 1.0, weight: segmentWeight + 3 });
             this.bringToFront();
           });
           legPolyline.on('mouseout', function(this: L.Polyline) {
-            this.setStyle({ opacity: baseOpacity, weight: segmentWeight, dashArray: segmentDashArray });
+            this.setStyle({ opacity: baseOpacity, weight: isSingleRunSelected ? segmentWeight + 2 : segmentWeight });
           });
 
           layerGroup.addLayer(legPolyline);
 
-          // Add Directional Arrow Marker at segment midpoint
+          // Directional Arrow Marker
           const midLat = (fromPt[0] + toPt[0]) / 2;
           const midLng = (fromPt[1] + toPt[1]) / 2;
           const arrowAngle = Math.atan2(toPt[1] - fromPt[1], toPt[0] - fromPt[0]) * (180 / Math.PI);
@@ -298,39 +358,6 @@ export const MapView: React.FC<MapViewProps> = ({
           });
           const arrowMarker = L.marker([midLat, midLng], { icon: arrowIcon, interactive: false });
           layerGroup.addLayer(arrowMarker);
-
-          // Async OSRM Road Geometry for this leg
-          fetchRouteOSRM([fromPt, toPt]).then((osrmLegCoords) => {
-            if (!isMounted || !layerGroup) return;
-            if (osrmLegCoords && osrmLegCoords.length > 0) {
-              layerGroup.removeLayer(legPolyline);
-              const roadLegPolyline = L.polyline(osrmLegCoords, {
-                color: densityColor,
-                weight: segmentWeight + 1,
-                dashArray: segmentDashArray,
-                opacity: baseOpacity,
-                lineCap: 'round',
-                lineJoin: 'round'
-              });
-
-              roadLegPolyline.bindTooltip(badgeHtml, {
-                permanent: true,
-                direction: 'center',
-                className: 'custom-route-badge',
-                interactive: false
-              });
-
-              roadLegPolyline.on('mouseover', function(this: L.Polyline) {
-                this.setStyle({ opacity: 1.0, weight: segmentWeight + 3 });
-                this.bringToFront();
-              });
-              roadLegPolyline.on('mouseout', function(this: L.Polyline) {
-                this.setStyle({ opacity: baseOpacity, weight: segmentWeight + 1, dashArray: segmentDashArray });
-              });
-
-              layerGroup.addLayer(roadLegPolyline);
-            }
-          });
         }
       });
     } else if (clientAtms && clientAtms.length > 0) {
@@ -374,11 +401,7 @@ export const MapView: React.FC<MapViewProps> = ({
       map.invalidateSize();
     }, 200);
 
-    return () => {
-      isMounted = false;
-    };
-
-  }, [runs, clientAtms, selectedRunIndex]);
+  }, [runs, clientAtms, selectedRunIndex, osrmGeometries]);
 
   return (
     <div className="relative z-0 w-full h-full rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100 min-h-[300px]">
@@ -386,3 +409,4 @@ export const MapView: React.FC<MapViewProps> = ({
     </div>
   );
 };
+
