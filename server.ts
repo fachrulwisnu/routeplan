@@ -126,7 +126,8 @@ async function getRoutingFromCuOpt(atmList: { id?: number; plan_no?: string; nam
         vehicle_locations: [[0, 0]],
         vehicle_ids: ["veh-1"],
         capacities: [[1200]],
-        vehicle_time_windows: [[0, 1000]]
+        vehicle_time_windows: [[0, 1000]],
+        vehicle_types: [1]
       },
       task_data: {
         task_locations: taskLocations,

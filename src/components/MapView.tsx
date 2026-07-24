@@ -65,6 +65,7 @@ export const MapView: React.FC<MapViewProps> = ({
       const fetchTasks: Promise<{ key: string; coords: [number, number][] | null }>[] = [];
 
       runs.forEach((run, runIdx) => {
+        const runKey = run.nama_run ? run.nama_run.toLowerCase().replace(/\s+/g, '-') : `run-${runIdx + 1}`;
         const waypoints: [number, number][] = [[depotLat, depotLng]];
 
         run.rute_kunjungan.forEach((stop) => {
@@ -78,7 +79,7 @@ export const MapView: React.FC<MapViewProps> = ({
         for (let i = 0; i < waypoints.length - 1; i++) {
           const fromPt = waypoints[i];
           const toPt = waypoints[i + 1];
-          const key = `${runIdx}_${i}_${fromPt[0].toFixed(5)},${fromPt[1].toFixed(5)}_${toPt[0].toFixed(5)},${toPt[1].toFixed(5)}`;
+          const key = `${runKey}_leg_${i}_${fromPt[0].toFixed(5)},${fromPt[1].toFixed(5)}_${toPt[0].toFixed(5)},${toPt[1].toFixed(5)}`;
 
           if (!osrmGeometries[key]) {
             fetchTasks.push(
@@ -261,6 +262,7 @@ export const MapView: React.FC<MapViewProps> = ({
         // Add return to depot waypoint
         waypoints.push([depotLat, depotLng]);
 
+        const runKey = run.nama_run ? run.nama_run.toLowerCase().replace(/\s+/g, '-') : `run-${runIdx + 1}`;
         const baseOpacity = isSingleRunSelected ? 1.0 : 0.6;
 
         // Draw segmented polylines with pre-fetched OSRM geometry, marching ants animation, & conditional badges
@@ -285,8 +287,20 @@ export const MapView: React.FC<MapViewProps> = ({
           const segmentDashArray = (isMacet || isPadat) ? '5, 10' : undefined;
 
           // Key for OSRM geometry cache
-          const key = `${runIdx}_${i}_${fromPt[0].toFixed(5)},${fromPt[1].toFixed(5)}_${toPt[0].toFixed(5)},${toPt[1].toFixed(5)}`;
-          const legCoords = osrmGeometries[key] || [fromPt, toPt];
+          const key = `${runKey}_leg_${i}_${fromPt[0].toFixed(5)},${fromPt[1].toFixed(5)}_${toPt[0].toFixed(5)},${toPt[1].toFixed(5)}`;
+          const legCoords = osrmGeometries[key];
+
+          // ABSOLUTE ELIMINATION OF FALLBACK STRAIGHT LINES:
+          // Never draw straight lines across buildings if OSRM geometry is not yet available.
+          if (!legCoords || legCoords.length < 2) {
+            // Trigger fetch if missing so it populates cache and re-renders
+            fetchRouteOSRM([fromPt, toPt]).then(coords => {
+              if (coords && coords.length > 0) {
+                setOsrmGeometries(prev => ({ ...prev, [key]: coords }));
+              }
+            });
+            continue;
+          }
 
           // 2. MARCHING ANTS ANIMATION: Apply .ant-animation class ONLY when a specific run is selected
           const polylineClassName = isSingleRunSelected ? 'ant-animation' : undefined;
@@ -345,10 +359,13 @@ export const MapView: React.FC<MapViewProps> = ({
 
           layerGroup.addLayer(legPolyline);
 
-          // Directional Arrow Marker
-          const midLat = (fromPt[0] + toPt[0]) / 2;
-          const midLng = (fromPt[1] + toPt[1]) / 2;
-          const arrowAngle = Math.atan2(toPt[1] - fromPt[1], toPt[0] - fromPt[0]) * (180 / Math.PI);
+          // Directional Arrow Marker on real road geometry
+          const midIdx = Math.floor(legCoords.length / 2);
+          const p1 = legCoords[Math.max(0, midIdx - 1)] || legCoords[0];
+          const p2 = legCoords[Math.min(legCoords.length - 1, midIdx + 1)] || legCoords[legCoords.length - 1];
+          const midLat = legCoords[midIdx][0];
+          const midLng = legCoords[midIdx][1];
+          const arrowAngle = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * (180 / Math.PI);
 
           const arrowIcon = L.divIcon({
             className: 'custom-arrow-icon',
