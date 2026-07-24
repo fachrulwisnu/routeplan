@@ -1,5 +1,6 @@
 import { ClientATM, RoutePlanRequest, RunsheetResponse, Run, VisitStop, PetugasDetail } from '../types';
 import { FLEET_VEHICLES, STAFF_OFFICERS } from '../data/initialData';
+import { vincentyDistance } from './vincenty';
 
 // Helper to parse lat/lng from string "lat, lng"
 function parseCoords(coordStr: string): { lat: number; lng: number } {
@@ -11,19 +12,9 @@ function parseCoords(coordStr: string): { lat: number; lng: number } {
   };
 }
 
-// Calculate Haversine distance in KM
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth radius in KM
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+// Calculate Vincenty Distance in KM
+function getVincentyDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  return vincentyDistance(lat1, lon1, lat2, lon2);
 }
 
 // Helper to format minutes into HH:MM
@@ -64,7 +55,7 @@ function nearestNeighborSort(group: ClientATM[], startDepot: { lat: number; lng:
 
     for (let i = 0; i < unvisited.length; i++) {
       const coords = parseCoords(unvisited[i].koordinat);
-      const dist = haversineKm(currentPos.lat, currentPos.lng, coords.lat, coords.lng);
+      const dist = getVincentyDistance(currentPos.lat, currentPos.lng, coords.lat, coords.lng);
       if (dist < minDistance) {
         minDistance = dist;
         nearestIdx = i;
@@ -129,12 +120,12 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
   // Depot location: PT Advantage Cideng (-6.173256, 106.810058)
   const depotCoords = { lat: -6.173256, lng: 106.810058 };
 
-  // Spatial Clustering: Sort by distance to Depot
+  // Spatial Clustering: Sort by distance to Depot (Vincenty Ellipsoid Precision)
   atms.sort((a, b) => {
     const cA = parseCoords(a.koordinat);
     const cB = parseCoords(b.koordinat);
-    const dA = haversineKm(depotCoords.lat, depotCoords.lng, cA.lat, cA.lng);
-    const dB = haversineKm(depotCoords.lat, depotCoords.lng, cB.lat, cB.lng);
+    const dA = getVincentyDistance(depotCoords.lat, depotCoords.lng, cA.lat, cA.lng);
+    const dB = getVincentyDistance(depotCoords.lat, depotCoords.lng, cB.lat, cB.lng);
     return dA - dB;
   });
 
@@ -204,7 +195,7 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
 
     group.forEach((atm, stopIdx) => {
       const currCoords = parseCoords(atm.koordinat);
-      let travelDistance = haversineKm(prevCoords.lat, prevCoords.lng, currCoords.lat, currCoords.lng);
+      let travelDistance = getVincentyDistance(prevCoords.lat, prevCoords.lng, currCoords.lat, currCoords.lng);
       travelDistance = Math.round(travelDistance * 10) / 10;
       
       // Calculate travel duration in minutes based on route speed and road constraints
@@ -294,14 +285,15 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
         is_zona_ganjil_genap: isOddEvenZone,
         is_lewat_tol: isTollRoute,
         prediksi_delay_menit: delayMinutes,
-        keterangan_ai: keteranganAi
+        keterangan_ai: keteranganAi,
+        info_rute_tambahan: stopIdx === 0 ? "Berangkat dari Depot Cideng." : isTollRoute ? "Menggunakan Jalan Tol Dalam Kota." : isOddEvenZone ? "Melewati kawasan Ganjil-Genap Jakarta." : "Melalui jalan arteri umum."
       });
 
       prevCoords = currCoords;
     });
 
     // Add trip back to depot distance
-    const returnDist = Math.round(haversineKm(prevCoords.lat, prevCoords.lng, depotCoords.lat, depotCoords.lng) * 10) / 10;
+    const returnDist = Math.round(getVincentyDistance(prevCoords.lat, prevCoords.lng, depotCoords.lat, depotCoords.lng) * 10) / 10;
     runTotalDistance += returnDist;
 
     // Determine if "Dengan Bag" or "Tanpa Bag"

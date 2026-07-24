@@ -6,6 +6,7 @@ import OpenAI from "openai";
 import { RoutePlanRequest, RunsheetResponse } from "./src/types";
 import { DUMMY_CLIENT_ATMS } from "./src/data/initialData";
 import { solveVRP } from "./src/utils/vrpSolver";
+import { vincentyDistance, parseCoordString } from "./src/utils/vincenty";
 
 // Hardcoded API credentials
 const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || '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';
@@ -20,19 +21,14 @@ const openai = new OpenAI({
 });
 
 const SYSTEM_PROMPT = `
-Anda adalah AI Traffic & VRP Routing Analyst tingkat lanjut untuk operasi Cash Management (pengisian ATM) PT Advantage SCM. Tugas Anda adalah menerima rute dasar, melakukan clustering spasial (geofencing anti-overlap), menganalisis kondisi lalu lintas Jakarta, dan memprediksi potensi keterlambatan.
+Anda adalah AI Traffic & VRP Routing Analyst tingkat lanjut untuk operasi Cash Management PT Advantage SCM. Tugas Anda adalah memproses skenario rute, memprediksi kemacetan jalanan nyata, mendeteksi aturan jalan, dan menghasilkan JSON yang detail untuk peta interaktif.
 
-ATURAN CLUSTERING & ROUTING (SANGAT KETAT):
-1. Geofencing/Isolasi Wilayah (Anti-Overlap): Anda WAJIB mengelompokkan ATM ke dalam "Run" berdasarkan isolasi wilayah geografis yang ketat. Run-1, Run-2, dst. TIDAK BOLEH saling menyilang atau tumpang tindih di peta. (Contoh: Run-1 khusus area Utara, Run-2 khusus Selatan).
-2. Urutan Logis (Nearest Neighbor): Di dalam satu Run, rute WAJIB mengalir secara sekuensial dari Titik 1 (Start/Prioritas Utama) menuju titik terdekat berikutnya. Jangan melompat bolak-balik.
-
-ATURAN PREDIKSI LALU LINTAS & WARNA:
-1. Prediksi Kemacetan (Traffic Density):
-   - Jika Macet Parah (jam sibuk 07:00-09:30 / 16:30-19:00): Set 'status_lalu_lintas' = "Macet Parah", 'warna_jalur' = "#EF4444" (Merah).
-   - Jika Padat Merayap: Set 'status_lalu_lintas' = "Padat", 'warna_jalur' = "#F59E0B" (Kuning/Oranye).
-   - Jika Lancar: Set 'status_lalu_lintas' = "Lancar", 'warna_jalur' = "#3B82F6" (Biru).
-2. Kalkulasi Delay & Aturan: Jika rute macet atau dihindari masuk Tol, tambahkan 'prediksi_delay_menit'. Sesuaikan dengan aturan Ganjil/Genap plat mobil. Format waktu selalu berantai HH:MM.
-3. Penanda Titik Awal: Tandai objek rute kunjungan pertama dengan 'is_titik_awal': true.
+ATURAN PREDIKSI, ROUTING & BADGES (SANGAT KETAT):
+1. Integritas Urutan Rute (Vincenty Proximity): Urutan rute yang Anda terima disusun berdasarkan algoritma kalkulasi jarak Vincenty (akurasi elipsoid bumi tinggi). Anda DILARANG KERAS mengubah atau melompat-lompatkan urutan kunjungan (Anti-Zigzag). Tugas Anda HANYA menganalisis kondisi lalu lintas di rute tersebut.
+2. Prediksi Kemacetan Berantai: Evaluasi jalan dari Titik A ke Titik B. Tentukan 'status_lalu_lintas' ("Lancar", "Padat", atau "Macet Parah"). Jika macet, WAJIB isi 'prediksi_delay_menit' (integer).
+3. Deteksi Jalan Tol: Evaluasi apakah dari Titik A ke B wajib masuk tol dalam kota. Isi boolean 'is_lewat_tol'. Jika lewat tol, berikan nama tolnya di 'info_rute_tambahan'.
+4. Deteksi Ganjil/Genap: Evaluasi apakah rute melewati zona G/G (misal: Sudirman/Thamrin). Isi boolean 'is_zona_ganjil_genap'. Pastikan akhiran plat mobil disesuaikan dengan tanggal operasional.
+5. Warna Garis: "Lancar" = "#3B82F6" (Biru), "Padat" = "#F59E0B" (Kuning), "Macet Parah" = "#EF4444" (Merah).
 
 FORMAT OUTPUT JSON YANG WAJIB ANDA HASILKAN:
 Jangan gunakan markdown pembuka/penutup \`\`\`json. Langsung keluarkan JSON murni.
@@ -46,7 +42,9 @@ Jangan gunakan markdown pembuka/penutup \`\`\`json. Langsung keluarkan JSON murn
     "total_jarak_tempuh_km": 25.5,
     "status_tugas": "Rute terisolasi tanpa overlap. Ada kemacetan di Run-1.",
     "total_mobil": "2/10",
-    "total_estimasi_delay_menit": 20
+    "total_estimasi_delay_menit": 20,
+    "rekomendasi_engine_terbaik": "NVIDIA cuOpt (Vincenty Base)",
+    "alasan_rekomendasi": "Jarak divalidasi dengan tingkat akurasi elipsoid Vincenty dan menghindari zona macet."
   },
   "runs": [
     {
@@ -79,7 +77,8 @@ Jangan gunakan markdown pembuka/penutup \`\`\`json. Langsung keluarkan JSON murn
           "is_zona_ganjil_genap": true,
           "is_lewat_tol": false,
           "prediksi_delay_menit": 20,
-          "keterangan_ai": "Kawasan Sudirman/GBK padat di pagi hari. Estimasi terlambat 20 menit."
+          "keterangan_ai": "Kawasan Sudirman/GBK padat di pagi hari. Estimasi terlambat 20 menit.",
+          "info_rute_tambahan": "Melewati zona ganjil genap Sudirman."
         },
         {
           "urutan": 2,
@@ -101,7 +100,8 @@ Jangan gunakan markdown pembuka/penutup \`\`\`json. Langsung keluarkan JSON murn
           "is_zona_ganjil_genap": false,
           "is_lewat_tol": true,
           "prediksi_delay_menit": 0,
-          "keterangan_ai": "Jalan Arteri Cideng relatif lancar."
+          "keterangan_ai": "Jalan Arteri Cideng relatif lancar.",
+          "info_rute_tambahan": "Rute tol dalam kota ke arah Cideng."
         }
       ]
     }
@@ -120,6 +120,43 @@ async function optimizeWithCuOpt(payloadData: RoutePlanRequest): Promise<Runshee
     "Content-Type": "application/json"
   };
 
+  // Build Vincenty Ellipsoid Cost & Travel Time Matrix dynamically from payloadData
+  const depotCoord: [number, number] = [-6.173256, 106.810057]; // Depot PT Advantage Cideng
+  const locations: [number, number][] = [depotCoord];
+
+  (payloadData.data_atm || []).forEach((atm) => {
+    locations.push(parseCoordString(atm.koordinat));
+  });
+
+  const N = locations.length;
+  const costMatrix: number[][] = [];
+  const travelTimeMatrix: number[][] = [];
+
+  for (let i = 0; i < N; i++) {
+    const costRow: number[] = [];
+    const timeRow: number[] = [];
+    for (let j = 0; j < N; j++) {
+      if (i === j) {
+        costRow.push(0);
+        timeRow.push(0);
+      } else {
+        const distKm = vincentyDistance(
+          locations[i][0], locations[i][1],
+          locations[j][0], locations[j][1]
+        );
+        costRow.push(distKm);
+        const timeMins = Math.max(1, Math.round((distKm / 25) * 60));
+        timeRow.push(timeMins);
+      }
+    }
+    costMatrix.push(costRow);
+    travelTimeMatrix.push(timeRow);
+  }
+
+  const taskLocations = Array.from({ length: N - 1 }, (_, i) => i + 1);
+  const taskIds = (payloadData.data_atm || []).map((a, i) => a.plan_no || `Task-${i + 1}`);
+  const taskDemands = (payloadData.data_atm || []).map((a) => [a.kebutuhan_kaset || 25]);
+
   const payload = {
     "action": "cuOpt_OptimizedRouting",
     "data": {
@@ -127,38 +164,30 @@ async function optimizeWithCuOpt(payloadData: RoutePlanRequest): Promise<Runshee
       "travel_time_waypoint_graph_data": null,
       "cost_matrix_data": {
         "data": {
-          "1": [
-            [0, 1, 1],
-            [1, 0, 1],
-            [1, 1, 0]
-          ]
+          "1": costMatrix
         }
       },
       "travel_time_matrix_data": {
         "data": {
-          "1": [
-            [0, 1, 1],
-            [1, 0, 1],
-            [1, 1, 0]
-          ]
+          "1": travelTimeMatrix
         }
       },
       "fleet_data": {
         "vehicle_locations": [[0, 0]],
-        "vehicle_ids": ["veh-1"],
-        "capacities": [[10]],
-        "vehicle_time_windows": [[0, 100]],
+        "vehicle_ids": ["veh-1", "veh-2"],
+        "capacities": [[1200]],
+        "vehicle_time_windows": [[0, 480]],
         "vehicle_types": [1],
       },
       "task_data": {
-        "task_locations": [1, 2],
-        "task_ids": ["Task-A", "Task-B"],
-        "demand": [[1, 1]],
-        "task_time_windows": [[0, 100], [0, 100]],
-        "service_times": [0, 0]
+        "task_locations": taskLocations,
+        "task_ids": taskIds,
+        "demand": taskDemands,
+        "task_time_windows": taskLocations.map(() => [0, 480]),
+        "service_times": taskLocations.map(() => 15)
       },
       "solver_config": {
-        "time_limit": 1,
+        "time_limit": 2,
         "objectives": { "cost": 1, "travel_time": 0 },
         "verbose_mode": false,
         "error_logging": true

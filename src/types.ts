@@ -47,6 +47,7 @@ export interface VisitStop {
   is_titik_awal?: boolean;
   prediksi_delay_menit?: number;
   keterangan_ai?: string;
+  info_rute_tambahan?: string;
 }
 
 export interface PetugasDetail {
@@ -77,6 +78,8 @@ export interface OperationalSummary {
   status_tugas: string; // "Semua ter-assign"
   total_mobil: string; // "3/10"
   total_estimasi_delay_menit?: number;
+  rekomendasi_engine_terbaik?: string;
+  alasan_rekomendasi?: string;
 }
 
 export interface RunsheetResponse {

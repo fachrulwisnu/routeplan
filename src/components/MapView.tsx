@@ -206,7 +206,12 @@ export const MapView: React.FC<MapViewProps> = ({
         // Add return to depot waypoint
         waypoints.push([depotLat, depotLng]);
 
-        // Draw segmented polylines with traffic density colors (#EF4444, #F59E0B, #3B82F6) & Directional Midpoint Arrows
+        // Determine base opacity: when viewing all runs, opacity is 0.4 for smooth layering; 1.0 when selected
+        const isAllRunsView = selectedRunIndex === null || selectedRunIndex === undefined;
+        const baseOpacity = isAllRunsView ? 0.4 : 1.0;
+        const baseWeight = isAllRunsView ? 5 : 6;
+
+        // Draw segmented polylines with traffic density colors (#EF4444, #F59E0B, #3B82F6) & Midpoint Badges
         for (let i = 0; i < waypoints.length - 1; i++) {
           const fromPt = waypoints[i];
           const toPt = waypoints[i + 1];
@@ -221,14 +226,52 @@ export const MapView: React.FC<MapViewProps> = ({
               : color
           );
 
+          // Build HTML for Floating Midpoint Route Badge
+          const statusText = stopData?.status_lalu_lintas || 'Lancar';
+          const isMacet = statusText === 'Macet Parah' || statusText === 'Macet';
+          const isPadat = statusText === 'Padat';
+          const delayText = stopData?.prediksi_delay_menit ? `+${stopData.prediksi_delay_menit}m` : '';
+
+          let trafficBadgeBg = 'bg-blue-600 text-white';
+          if (isMacet) trafficBadgeBg = 'bg-red-600 text-white';
+          else if (isPadat) trafficBadgeBg = 'bg-amber-500 text-white';
+
+          const badgeHtml = `
+            <div class="flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md px-2 py-1 rounded-lg shadow-lg border border-slate-700/80 text-[10px] font-extrabold whitespace-nowrap pointer-events-none">
+              <span class="${trafficBadgeBg} px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                ${isMacet ? '🔴' : isPadat ? '🟡' : '🔵'} ${statusText} ${delayText}
+              </span>
+              ${stopData?.is_lewat_tol ? `<span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded-md font-black">[TOL]</span>` : ''}
+              ${stopData?.is_zona_ganjil_genap ? `<span class="bg-amber-600 text-white px-1.5 py-0.5 rounded-md font-black">[G/G]</span>` : ''}
+            </div>
+          `;
+
           // Baseline fallback polyline for segment
           const legPolyline = L.polyline([fromPt, toPt], {
             color: segmentColor,
-            weight: 5,
-            opacity: 0.8,
+            weight: baseWeight,
+            opacity: baseOpacity,
             lineCap: 'round',
             lineJoin: 'round'
           });
+
+          // Bind Permanent Midpoint Tooltip
+          legPolyline.bindTooltip(badgeHtml, {
+            permanent: true,
+            direction: 'center',
+            className: 'custom-route-badge',
+            interactive: false
+          });
+
+          // Interactive Hover & Click Highlighting
+          legPolyline.on('mouseover', function(this: L.Polyline) {
+            this.setStyle({ opacity: 1.0, weight: 8 });
+            this.bringToFront();
+          });
+          legPolyline.on('mouseout', function(this: L.Polyline) {
+            this.setStyle({ opacity: baseOpacity, weight: baseWeight });
+          });
+
           layerGroup.addLayer(legPolyline);
 
           // Add Directional Arrow Marker at segment midpoint
@@ -252,11 +295,27 @@ export const MapView: React.FC<MapViewProps> = ({
               layerGroup.removeLayer(legPolyline);
               const roadLegPolyline = L.polyline(osrmLegCoords, {
                 color: segmentColor,
-                weight: 6,
-                opacity: 0.9,
+                weight: baseWeight + 1,
+                opacity: baseOpacity,
                 lineCap: 'round',
                 lineJoin: 'round'
               });
+
+              roadLegPolyline.bindTooltip(badgeHtml, {
+                permanent: true,
+                direction: 'center',
+                className: 'custom-route-badge',
+                interactive: false
+              });
+
+              roadLegPolyline.on('mouseover', function(this: L.Polyline) {
+                this.setStyle({ opacity: 1.0, weight: 9 });
+                this.bringToFront();
+              });
+              roadLegPolyline.on('mouseout', function(this: L.Polyline) {
+                this.setStyle({ opacity: baseOpacity, weight: baseWeight + 1 });
+              });
+
               layerGroup.addLayer(roadLegPolyline);
             }
           });
