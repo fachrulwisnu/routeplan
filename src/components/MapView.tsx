@@ -10,16 +10,14 @@ interface MapViewProps {
   height?: string;
 }
 
-// Colors for different runs
+// Theme colors for different runs (exclusive elegant palette: Purple, Teal, Pink, Indigo, Magenta, Cyan)
 const RUN_COLORS = [
-  '#2563eb', // Blue
-  '#16a34a', // Green
-  '#d97706', // Amber
   '#9333ea', // Purple
-  '#dc2626', // Red
-  '#0284c7', // Cyan
+  '#0d9488', // Teal
+  '#db2777', // Pink
   '#4f46e5', // Indigo
-  '#ca8a04', // Yellow
+  '#c026d3', // Magenta
+  '#0891b2', // Cyan
 ];
 
 // Asynchronous helper to fetch OSRM driving route geometry following real roads
@@ -109,7 +107,7 @@ export const MapView: React.FC<MapViewProps> = ({
           return; // Filter to selected run if specified
         }
 
-        const color = RUN_COLORS[runIdx % RUN_COLORS.length];
+        const runThemeColor = run.warna_tema_run || RUN_COLORS[runIdx % RUN_COLORS.length];
         const waypoints: [number, number][] = [[depotLat, depotLng]];
 
         // Group stops by coordinates to handle single-point multi-trips (Fig 7 in FSD)
@@ -147,7 +145,7 @@ export const MapView: React.FC<MapViewProps> = ({
           } else {
             stopIcon = L.divIcon({
               className: 'custom-stop-icon',
-              html: `<div style="background-color: ${color}; color: white; border-radius: 50%; padding: 2px 6px; font-size: 11px; font-weight: 700; border: 2px solid white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); min-width: 26px; text-align: center;">
+              html: `<div style="background-color: ${runThemeColor}; color: white; border-radius: 50%; padding: 2px 6px; font-size: 11px; font-weight: 700; border: 2px solid white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); min-width: 26px; text-align: center;">
                 ${seqNumbers}
               </div>`,
               iconSize: [28, 28],
@@ -158,11 +156,11 @@ export const MapView: React.FC<MapViewProps> = ({
           const popupContent = `
             <div style="font-family: sans-serif; min-width: 230px; max-width: 280px; padding: 4px;">
               <div style="font-weight: 700; color: #1e293b; font-size: 13px; margin-bottom: 2px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; display: flex; align-items: center; justify-content: space-between;">
-                <span>${run.nama_run.toUpperCase()} ${isMulti ? `(${stopsAtPoint.length} Trip)` : ''}</span>
+                <span style="color: ${runThemeColor};">${run.nama_run.toUpperCase()} ${isMulti ? `(${stopsAtPoint.length} Trip)` : ''}</span>
                 ${isStartNode ? `<span style="background: #10b981; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 800;">START</span>` : ''}
               </div>
               ${stopsAtPoint.map(s => {
-                const trafficColor = s.warna_jalur || (s.status_lalu_lintas === 'Macet Parah' || s.status_lalu_lintas === 'Macet' ? '#EF4444' : s.status_lalu_lintas === 'Padat' ? '#F59E0B' : '#3B82F6');
+                const trafficColor = s.warna_kepadatan || s.warna_jalur || (s.status_lalu_lintas === 'Macet' || s.status_lalu_lintas === 'Macet Parah' ? '#EF4444' : s.status_lalu_lintas === 'Padat' ? '#F97316' : runThemeColor);
                 return `
                 <div style="margin-top: 6px; padding: 8px; background: #f8fafc; border-radius: 8px; border-left: 4px solid ${trafficColor}; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
                   <div style="font-weight: 700; font-size: 12px; color: #0f172a; display: flex; justify-content: space-between; align-items: center;">
@@ -209,37 +207,49 @@ export const MapView: React.FC<MapViewProps> = ({
         // Determine base opacity: when viewing all runs, opacity is 0.4 for smooth layering; 1.0 when selected
         const isAllRunsView = selectedRunIndex === null || selectedRunIndex === undefined;
         const baseOpacity = isAllRunsView ? 0.4 : 1.0;
-        const baseWeight = isAllRunsView ? 5 : 6;
 
-        // Draw segmented polylines with traffic density colors (#EF4444, #F59E0B, #3B82F6) & Midpoint Badges
+        // Draw segmented polylines with traffic density colors (#EF4444, #F97316, or runThemeColor) & Midpoint Badges
         for (let i = 0; i < waypoints.length - 1; i++) {
           const fromPt = waypoints[i];
           const toPt = waypoints[i + 1];
           const stopData = run.rute_kunjungan[i];
           
-          // Determine traffic color for segment
-          const segmentColor = stopData?.warna_jalur || (
-            stopData?.status_lalu_lintas === 'Macet Parah' || stopData?.status_lalu_lintas === 'Macet'
+          // Destination stop (Point B) density color
+          const densityColor = stopData?.warna_kepadatan || stopData?.warna_jalur || (
+            stopData?.status_lalu_lintas === 'Macet' || stopData?.status_lalu_lintas === 'Macet Parah'
               ? '#EF4444'
               : stopData?.status_lalu_lintas === 'Padat'
-              ? '#F59E0B'
-              : color
+              ? '#F97316'
+              : runThemeColor
           );
 
-          // Build HTML for Floating Midpoint Route Badge
           const statusText = stopData?.status_lalu_lintas || 'Lancar';
-          const isMacet = statusText === 'Macet Parah' || statusText === 'Macet';
-          const isPadat = statusText === 'Padat';
-          const delayText = stopData?.prediksi_delay_menit ? `+${stopData.prediksi_delay_menit}m` : '';
+          const isMacet = statusText === 'Macet' || statusText === 'Macet Parah' || densityColor.toUpperCase() === '#EF4444';
+          const isPadat = statusText === 'Padat' || densityColor.toUpperCase() === '#F97316' || densityColor.toUpperCase() === '#F59E0B';
 
-          let trafficBadgeBg = 'bg-blue-600 text-white';
-          if (isMacet) trafficBadgeBg = 'bg-red-600 text-white';
-          else if (isPadat) trafficBadgeBg = 'bg-amber-500 text-white';
+          // CSS styling: If Macet/Padat -> weight 8, dashArray '5, 10'. If Lancar -> weight 5, solid.
+          const segmentWeight = (isMacet || isPadat) ? 8 : 5;
+          const segmentDashArray = (isMacet || isPadat) ? '5, 10' : undefined;
+
+          // Build HTML for Floating Midpoint Route Badge
+          const delayVal = stopData?.prediksi_delay_menit || (isMacet ? 15 : isPadat ? 10 : 0);
+          const delayText = delayVal > 0 ? `+${delayVal}m` : '';
+
+          let badgeBgStyle = `background-color: ${runThemeColor}; color: white;`;
+          let badgeLabel = `🔵 Lancar`;
+
+          if (isMacet) {
+            badgeBgStyle = 'background-color: #ef4444; color: white;';
+            badgeLabel = `🔴 Macet ${delayText}`;
+          } else if (isPadat) {
+            badgeBgStyle = 'background-color: #f97316; color: white;';
+            badgeLabel = `🟡 Padat ${delayText}`;
+          }
 
           const badgeHtml = `
             <div class="flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md px-2 py-1 rounded-lg shadow-lg border border-slate-700/80 text-[10px] font-extrabold whitespace-nowrap pointer-events-none">
-              <span class="${trafficBadgeBg} px-1.5 py-0.5 rounded-md flex items-center gap-1">
-                ${isMacet ? '🔴' : isPadat ? '🟡' : '🔵'} ${statusText} ${delayText}
+              <span style="${badgeBgStyle}" class="px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                ${badgeLabel}
               </span>
               ${stopData?.is_lewat_tol ? `<span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded-md font-black">[TOL]</span>` : ''}
               ${stopData?.is_zona_ganjil_genap ? `<span class="bg-amber-600 text-white px-1.5 py-0.5 rounded-md font-black">[G/G]</span>` : ''}
@@ -248,8 +258,9 @@ export const MapView: React.FC<MapViewProps> = ({
 
           // Baseline fallback polyline for segment
           const legPolyline = L.polyline([fromPt, toPt], {
-            color: segmentColor,
-            weight: baseWeight,
+            color: densityColor,
+            weight: segmentWeight,
+            dashArray: segmentDashArray,
             opacity: baseOpacity,
             lineCap: 'round',
             lineJoin: 'round'
@@ -265,11 +276,11 @@ export const MapView: React.FC<MapViewProps> = ({
 
           // Interactive Hover & Click Highlighting
           legPolyline.on('mouseover', function(this: L.Polyline) {
-            this.setStyle({ opacity: 1.0, weight: 8 });
+            this.setStyle({ opacity: 1.0, weight: segmentWeight + 2 });
             this.bringToFront();
           });
           legPolyline.on('mouseout', function(this: L.Polyline) {
-            this.setStyle({ opacity: baseOpacity, weight: baseWeight });
+            this.setStyle({ opacity: baseOpacity, weight: segmentWeight, dashArray: segmentDashArray });
           });
 
           layerGroup.addLayer(legPolyline);
@@ -281,7 +292,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
           const arrowIcon = L.divIcon({
             className: 'custom-arrow-icon',
-            html: `<div style="transform: rotate(${arrowAngle}deg); color: ${segmentColor}; font-size: 14px; font-weight: 900; text-shadow: 0 0 3px white;">➔</div>`,
+            html: `<div style="transform: rotate(${arrowAngle}deg); color: ${densityColor}; font-size: 14px; font-weight: 900; text-shadow: 0 0 3px white;">➔</div>`,
             iconSize: [16, 16],
             iconAnchor: [8, 8]
           });
@@ -294,8 +305,9 @@ export const MapView: React.FC<MapViewProps> = ({
             if (osrmLegCoords && osrmLegCoords.length > 0) {
               layerGroup.removeLayer(legPolyline);
               const roadLegPolyline = L.polyline(osrmLegCoords, {
-                color: segmentColor,
-                weight: baseWeight + 1,
+                color: densityColor,
+                weight: segmentWeight + 1,
+                dashArray: segmentDashArray,
                 opacity: baseOpacity,
                 lineCap: 'round',
                 lineJoin: 'round'
@@ -309,11 +321,11 @@ export const MapView: React.FC<MapViewProps> = ({
               });
 
               roadLegPolyline.on('mouseover', function(this: L.Polyline) {
-                this.setStyle({ opacity: 1.0, weight: 9 });
+                this.setStyle({ opacity: 1.0, weight: segmentWeight + 3 });
                 this.bringToFront();
               });
               roadLegPolyline.on('mouseout', function(this: L.Polyline) {
-                this.setStyle({ opacity: baseOpacity, weight: baseWeight + 1 });
+                this.setStyle({ opacity: baseOpacity, weight: segmentWeight + 1, dashArray: segmentDashArray });
               });
 
               layerGroup.addLayer(roadLegPolyline);

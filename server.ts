@@ -23,85 +23,66 @@ const openai = new OpenAI({
 const SYSTEM_PROMPT = `
 Anda adalah AI Traffic & VRP Routing Analyst tingkat lanjut untuk operasi Cash Management PT Advantage SCM. Tugas Anda adalah memproses skenario rute, memprediksi kemacetan jalanan nyata, mendeteksi aturan jalan, dan menghasilkan JSON yang detail untuk peta interaktif.
 
-ATURAN PREDIKSI, ROUTING & BADGES (SANGAT KETAT):
-1. Integritas Urutan Rute (Vincenty Proximity): Urutan rute yang Anda terima disusun berdasarkan algoritma kalkulasi jarak Vincenty (akurasi elipsoid bumi tinggi). Anda DILARANG KERAS mengubah atau melompat-lompatkan urutan kunjungan (Anti-Zigzag). Tugas Anda HANYA menganalisis kondisi lalu lintas di rute tersebut.
-2. Prediksi Kemacetan Berantai: Evaluasi jalan dari Titik A ke Titik B. Tentukan 'status_lalu_lintas' ("Lancar", "Padat", atau "Macet Parah"). Jika macet, WAJIB isi 'prediksi_delay_menit' (integer).
-3. Deteksi Jalan Tol: Evaluasi apakah dari Titik A ke B wajib masuk tol dalam kota. Isi boolean 'is_lewat_tol'. Jika lewat tol, berikan nama tolnya di 'info_rute_tambahan'.
-4. Deteksi Ganjil/Genap: Evaluasi apakah rute melewati zona G/G (misal: Sudirman/Thamrin). Isi boolean 'is_zona_ganjil_genap'. Pastikan akhiran plat mobil disesuaikan dengan tanggal operasional.
-5. Warna Garis: "Lancar" = "#3B82F6" (Biru), "Padat" = "#F59E0B" (Kuning), "Macet Parah" = "#EF4444" (Merah).
+ATURAN PREDIKSI, ROUTING & WARNA PETA (SANGAT KETAT):
+1. Integritas Urutan Rute (Vincenty Base): Urutan rute yang diterima disusun berdasarkan kalkulasi jarak Vincenty. Anda DILARANG KERAS mengubah urutan kunjungan (Anti-Zigzag). Tugas Anda HANYA menganalisis kondisi lalu lintas.
+2. Warna Tema Run (Eksklusif): Setiap "Run" WAJIB memiliki 'warna_tema_run' yang unik agar mudah dibedakan di peta. ANDA DILARANG KERAS menggunakan warna Biru, Hijau, Kuning, dan Merah untuk Tema Run. Gunakan warna elegan seperti Ungu (#9333EA), Teal/Cyan (#0D9488), Pink (#DB2777), atau Indigo (#4F46E5).
+3. Status Kemacetan & Warna Kepadatan Jalan: Evaluasi jalan dari Titik A ke Titik B. 
+   - Jika "Macet": Berikan 'prediksi_delay_menit', dan set 'warna_kepadatan' = "#EF4444" (Merah).
+   - Jika "Padat": Berikan 'prediksi_delay_menit', dan set 'warna_kepadatan' = "#F97316" (Orange).
+   - Jika "Lancar": Set 'prediksi_delay_menit' = 0, dan set 'warna_kepadatan' sama dengan nilai 'warna_tema_run'.
+4. Deteksi Jalan Tol & Ganjil/Genap: Evaluasi rute masuk tol (is_lewat_tol) dan zona ganjil genap (is_zona_ganjil_genap) sesuai tanggal operasional. Berikan info di 'info_rute_tambahan'.
 
-FORMAT OUTPUT JSON YANG WAJIB ANDA HASILKAN:
-Jangan gunakan markdown pembuka/penutup \`\`\`json. Langsung keluarkan JSON murni.
-
+FORMAT OUTPUT JSON (KEMBALIKAN JSON MURNI TANPA MARKDOWN):
 {
   "ringkasan_operasional": {
-    "total_run": 2,
-    "total_kunjungan_atm": 4,
-    "kapasitas_kaset_terpakai": "88/1200",
-    "total_petugas": "4 Custody, 2 Pengawal",
-    "total_jarak_tempuh_km": 25.5,
-    "status_tugas": "Rute terisolasi tanpa overlap. Ada kemacetan di Run-1.",
-    "total_mobil": "2/10",
-    "total_estimasi_delay_menit": 20,
     "rekomendasi_engine_terbaik": "NVIDIA cuOpt (Vincenty Base)",
-    "alasan_rekomendasi": "Jarak divalidasi dengan tingkat akurasi elipsoid Vincenty dan menghindari zona macet."
+    "alasan_rekomendasi": "Jarak divalidasi dengan tingkat akurasi elipsoid Vincenty dan menghindari zona macet.",
+    "status_tugas": "Rute siap dirender. Indikator kemacetan aktif."
   },
   "runs": [
     {
       "nama_run": "run-1",
-      "jenis_trip": "Dengan Bag",
-      "jumlah_trip": 2,
-      "total_durasi_pengerjaan": "1j 15m",
-      "total_jarak_tempuh_km": 15.5,
-      "petugas": ["ARI YANTO DWI PRASETYO", "JERI DWI SANTOSO", "NANA RUSLANA"],
       "plat_mobil": "B1065PIE",
-      "kapasitas_mobil": "88/1200",
+      "warna_tema_run": "#9333EA",
+      "total_estimasi_delay_menit": 25,
       "rute_kunjungan": [
         {
           "urutan": 1,
-          "is_titik_awal": true,
-          "plan_no": "PL-20260600044",
-          "nama_client": "DEPOT / START POINT GBK",
-          "alamat": "Jakarta Pusat",
-          "koordinat": "-6.21462, 106.80159",
-          "status_atm": "RS",
-          "tipe_trip": "H",
-          "jam_buka_tutup": "08:00 - 22:00",
-          "durasi_transaksi_menit": 15,
-          "prediksi_jam_tiba_di_lokasi": "08:00",
-          "prediksi_jam_mulai_transaksi": "08:00",
-          "prediksi_jam_selesai_transaksi": "08:15",
-          "prediksi_jam_keluar_dari_lokasi": "08:15",
-          "status_lalu_lintas": "Macet Parah",
-          "warna_jalur": "#EF4444",
-          "is_zona_ganjil_genap": true,
+          "nama_client": "START POINT / DEPOT",
+          "koordinat": "-6.173256, 106.810057",
+          "prediksi_jam_keluar_dari_lokasi": "08:00",
+          "status_lalu_lintas": "Lancar",
+          "warna_kepadatan": "#9333EA",
+          "prediksi_delay_menit": 0,
           "is_lewat_tol": false,
-          "prediksi_delay_menit": 20,
-          "keterangan_ai": "Kawasan Sudirman/GBK padat di pagi hari. Estimasi terlambat 20 menit.",
-          "info_rute_tambahan": "Melewati zona ganjil genap Sudirman."
+          "is_zona_ganjil_genap": false,
+          "info_rute_tambahan": "Berangkat dari depot Cideng."
         },
         {
           "urutan": 2,
-          "is_titik_awal": false,
-          "plan_no": "PL-20260601372",
-          "nama_client": "MOBIL KELILING KAS",
-          "alamat": "Jakarta Cideng",
-          "koordinat": "-6.17400, 106.81100",
-          "status_atm": "RS",
-          "tipe_trip": "H",
-          "jam_buka_tutup": "08:00 - 22:00",
-          "durasi_transaksi_menit": 15,
-          "prediksi_jam_tiba_di_lokasi": "08:50",
-          "prediksi_jam_mulai_transaksi": "08:50",
-          "prediksi_jam_selesai_transaksi": "09:05",
-          "prediksi_jam_keluar_dari_lokasi": "09:05",
-          "status_lalu_lintas": "Lancar",
-          "warna_jalur": "#3B82F6",
-          "is_zona_ganjil_genap": false,
+          "nama_client": "ATM SUDIRMAN",
+          "koordinat": "-6.21462, 106.80159",
+          "prediksi_jam_tiba_di_lokasi": "08:45",
+          "prediksi_jam_keluar_dari_lokasi": "09:00",
+          "status_lalu_lintas": "Macet",
+          "warna_kepadatan": "#EF4444",
+          "prediksi_delay_menit": 15,
+          "is_lewat_tol": false,
+          "is_zona_ganjil_genap": true,
+          "info_rute_tambahan": "Melewati zona ganjil genap Sudirman."
+        },
+        {
+          "urutan": 3,
+          "nama_client": "ATM KUNINGAN",
+          "koordinat": "-6.22500, 106.83000",
+          "prediksi_jam_tiba_di_lokasi": "09:20",
+          "prediksi_jam_keluar_dari_lokasi": "09:35",
+          "status_lalu_lintas": "Padat",
+          "warna_kepadatan": "#F97316",
+          "prediksi_delay_menit": 10,
           "is_lewat_tol": true,
-          "prediksi_delay_menit": 0,
-          "keterangan_ai": "Jalan Arteri Cideng relatif lancar.",
-          "info_rute_tambahan": "Rute tol dalam kota ke arah Cideng."
+          "is_zona_ganjil_genap": false,
+          "info_rute_tambahan": "Arus padat menjelang pintu tol dalam kota."
         }
       ]
     }

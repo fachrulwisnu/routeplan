@@ -40,8 +40,9 @@ export interface VisitStop {
   prediksi_jam_selesai_transaksi: string; // "08:45"
   prediksi_jam_keluar_dari_lokasi: string; // "08:45"
   kebutuhan_kaset?: number;
-  status_lalu_lintas?: 'Macet' | 'Lancar' | string;
-  warna_jalur?: string; // "#FF0000" or "#0088FF"
+  status_lalu_lintas?: 'Macet' | 'Padat' | 'Lancar' | string;
+  warna_jalur?: string; // "#EF4444", "#F97316", or theme color
+  warna_kepadatan?: string; // "#EF4444" (Macet), "#F97316" (Padat), or theme color (Lancar)
   is_zona_ganjil_genap?: boolean;
   is_lewat_tol?: boolean;
   is_titik_awal?: boolean;
@@ -58,6 +59,7 @@ export interface PetugasDetail {
 
 export interface Run {
   nama_run: string; // "run-1", "run-2", etc.
+  warna_tema_run?: string; // e.g. "#9333EA", "#0D9488", "#DB2777"
   jenis_trip: string; // "Dengan Bag" | "Tanpa Bag"
   jumlah_trip: number;
   total_durasi_pengerjaan: string; // "1j 15m"
