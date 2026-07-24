@@ -21,21 +21,21 @@ const openai = new OpenAI({
   timeout: 120000,
 });
 
-// MASTER SYSTEM PROMPT FOR NEMOTRON-3 JURI ANALYST
-const SYSTEM_PROMPT = `Anda adalah Juri Algoritma VRP. Bandingkan 2 rute (cuOpt vs MileApp), prediksi macet, dan kembalikan JSON secepat mungkin.
+// MASTER SYSTEM PROMPT FOR NEMOTRON-3 JURI ANALYST (FAST-TRACK VERSION)
+const SYSTEM_PROMPT = `Anda adalah VRP Routing Engine & Traffic Evaluator. Tugas Anda menerima data urutan rute (cuOpt vs MileApp), memetakan kemacetan lalu lintas Jakarta secara cepat, dan mengembalikan hasil akhir murni dalam bentuk JSON.
 
-ATURAN KETAT:
-1. Tema Run: Gunakan "#9333EA", "#0D9488", atau "#DB2777".
-2. Macet: 'warna_kepadatan'="#EF4444", isi 'prediksi_delay_menit'.
-3. Padat: 'warna_kepadatan'="#F97316". Lancar: Samakan with tema.
-4. Tol & Ganjil/Genap: Deteksi berdasar lokasi Jakarta. Waktu (HH:MM) harus berantai.
-5. SINGKAT & CEPAT: Jangan berikan penjelasan panjang. Langsung output JSON.
+ATURAN EKSEKUSI KILAT:
+1. Jangan gunakan proses penalaran panjang. Langsung petakan data.
+2. Warna Tema Run: "#9333EA" (Ungu), "#0D9488" (Teal), atau "#DB2777" (Pink).
+3. Kepadatan Jalan: Lancar (warna tema), Padat (#F97316 + delay), Macet (#EF4444 + delay 15m).
+4. Aturan: Deteksi ganjil/genap dan tol berdasarkan koordinat.
+5. OUTPUT: KEMBALIKAN HANYA JSON MURNI TANPA TEKS LAIN DAN TANPA MARKDOWN.
 
-FORMAT OUTPUT WAJIB (JSON MURNI TANPA MARKDOWN):
+FORMAT JSON WAJIB:
 {
   "ringkasan_operasional": {
     "rekomendasi_engine_terbaik": "NVIDIA cuOpt",
-    "alasan_rekomendasi": "Waktu tempuh lebih singkat.",
+    "alasan_rekomendasi": "Jalur lebih pendek dan minim konflik lalu lintas.",
     "status_tugas": "Perbandingan selesai."
   },
   "opsi_rute": {
@@ -49,7 +49,7 @@ FORMAT OUTPUT WAJIB (JSON MURNI TANPA MARKDOWN):
           {
             "urutan": 1,
             "is_titik_awal": true,
-            "nama_client": "DEPOT CIDENG (START)",
+            "nama_client": "DEPOT (START)",
             "koordinat": "-6.173256, 106.810057",
             "prediksi_jam_keluar_dari_lokasi": "08:00",
             "status_lalu_lintas": "Lancar",
@@ -57,21 +57,7 @@ FORMAT OUTPUT WAJIB (JSON MURNI TANPA MARKDOWN):
             "prediksi_delay_menit": 0,
             "is_lewat_tol": false,
             "is_zona_ganjil_genap": false,
-            "info_rute_tambahan": "Titik awal armada."
-          },
-          {
-            "urutan": 2,
-            "is_titik_awal": false,
-            "nama_client": "ATM SUDIRMAN",
-            "koordinat": "-6.214620, 106.801590",
-            "prediksi_jam_tiba_di_lokasi": "08:45",
-            "prediksi_jam_keluar_dari_lokasi": "09:00",
-            "status_lalu_lintas": "Macet",
-            "warna_kepadatan": "#EF4444",
-            "prediksi_delay_menit": 15,
-            "is_lewat_tol": false,
-            "is_zona_ganjil_genap": true,
-            "info_rute_tambahan": "Kawasan macet. Plat ganjil aman."
+            "info_rute_tambahan": "Titik awal."
           }
         ]
       }
@@ -196,13 +182,11 @@ async function evaluateAndPredict(dataMaster: any, resCuOpt: any, resMile: any) 
       model: "nvidia/nemotron-3-super-120b-a12b",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Evaluasi rute ini dan kembalikan JSON utuh: ${JSON.stringify(payloadToNemotron)}` }
+        { role: "user", content: `Evaluasi rute ini dan berikan JSON: ${JSON.stringify(payloadToNemotron)}` }
       ],
-      temperature: 0.1,
+      temperature: 0.0,
       top_p: 0.95,
-      max_tokens: 8192,
-      reasoning_budget: 4096,
-      chat_template_kwargs: { enable_thinking: true },
+      max_tokens: 4096,
       stream: false
     } as any);
 

@@ -42,10 +42,10 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
   }, [isGenerating]);
 
   const stepDetails = [
-    { step: 1, label: "Menarik Data ATM dari Sistem...", percent: 25 },
-    { step: 2, label: "Menghitung Matriks Jarak Vincenty...", percent: 50 },
-    { step: 3, label: "Mengoptimasi Rute dengan NVIDIA cuOpt...", percent: 75 },
-    { step: 4, label: "AI Nemotron Memprediksi Kepadatan Lalu Lintas...", percent: 90 },
+    { step: 1, label: "Menarik Data ATM dari Sistem", percent: 25 },
+    { step: 2, label: "Menghitung Matriks Jarak Vincenty", percent: 50 },
+    { step: 3, label: "Mengoptimasi Rute dengan Engine AI Terbaik", percent: 75 },
+    { step: 4, label: "AI Engine Memprediksi Kepadatan Lalu Lintas", percent: 90 },
   ];
 
   const currentStepInfo = stepDetails.find(s => s.step === loadingStep) || stepDetails[0];
@@ -292,7 +292,7 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
           {isGenerating ? (
             <>
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>MEMPROSES AI VRP SOLVER ({currentStepInfo.percent}%)...</span>
+              <span>Engine Sedang Memproses ({currentStepInfo.percent}%)...</span>
             </>
           ) : (
             <>
