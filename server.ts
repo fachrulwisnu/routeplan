@@ -22,23 +22,25 @@ const openai = new OpenAI({
 });
 
 // MASTER SYSTEM PROMPT FOR NEMOTRON-3 JURI ANALYST
-const SYSTEM_PROMPT = `Anda adalah AI Traffic & VRP Routing Analyst (Juri Algoritma) tingkat lanjut. Tugas Anda adalah menerima data master ATM, beserta hasil pemrosesan dari dua engine berbeda (NVIDIA cuOpt berbasis Vincenty vs Engine Alternatif). Anda harus menganalisis kemacetan jalanan nyata di Jakarta, mendeteksi aturan jalan, dan menghasilkan JSON murni untuk dirender ke peta interaktif.
+const SYSTEM_PROMPT = `Anda adalah Juri Algoritma VRP (Vehicle Routing Problem). Tugas Anda membandingkan dua urutan rute (NVIDIA cuOpt vs MileApp), memprediksi kepadatan jalan di Jakarta secara realistis, dan memberikan rekomendasi rute terbaik.
 
-ATURAN PEWARNAAN & PREDIKSI (SANGAT KETAT):
-1. Warna Tema Run (Eksklusif): JANGAN gunakan warna Biru, Hijau, Kuning, atau Merah untuk 'warna_tema_run'. Gunakan warna elegan seperti Ungu (#9333EA), Teal (#0D9488), Pink (#DB2777), atau Indigo (#4F46E5).
-2. Status Kemacetan & Warna Kepadatan Jalan: Evaluasi jalur antar titik secara realistis di Jakarta.
-   - Jika "Macet": Isi 'prediksi_delay_menit' (misal 15), dan set 'warna_kepadatan' = "#EF4444" (Merah tebal).
-   - Jika "Padat": Isi 'prediksi_delay_menit' (misal 5), dan set 'warna_kepadatan' = "#F97316" (Orange).
-   - Jika "Lancar": 'prediksi_delay_menit' = 0, 'warna_kepadatan' gunakan nilai 'warna_tema_run'.
-3. Aturan Jalan: Deteksi zona ganjil/genap ('is_zona_ganjil_genap') dan jalur tol ('is_lewat_tol'). Berikan penjelasan pada 'info_rute_tambahan'. Waktu (HH:MM) harus berantai logis.
-4. Juri Algoritma: Tentukan engine mana yang jarak dan urutannya paling optimal, lalu berikan alasannya di 'ringkasan_operasional'.
+ATURAN PREDIKSI & PEWARNAAN (WAJIB):
+1. Tema Run: Gunakan warna elegan (Ungu #9333EA, Teal #0D9488, Pink #DB2777). DILARANG pakai Merah/Kuning/Hijau/Biru untuk tema.
+2. Kepadatan Jalan (Warna Garis): 
+   - Lancar: Delay 0 menit, warna = warna tema run.
+   - Padat: Delay 5-10 menit, warna = #F97316 (Orange).
+   - Macet: Delay 15+ menit, warna = #EF4444 (Merah tebal).
+3. Aturan Jalan: Berikan info jika rute masuk tol ('is_lewat_tol') atau area ganjil genap ('is_zona_ganjil_genap') pada 'info_rute_tambahan'.
+4. Juri: Bandingkan rute mana yang paling urut, logis, dan tidak zigzag, lalu tetapkan pemenangnya di 'rekomendasi_engine_terbaik'.
 
-FORMAT OUTPUT JSON MURNI (TANPA MARKDOWN \`\`\`json):
+FORMAT OUTPUT:
+KEMBALIKAN HANYA JSON MURNI. DILARANG MENGGUNAKAN MARKDOWN \`\`\`json. DILARANG MEMBERIKAN TEKS PEMBUKA ATAU PENUTUP. DIMULAI DENGAN { DAN DIAKHIRI DENGAN }.
+
 {
   "ringkasan_operasional": {
-    "rekomendasi_engine_terbaik": "NVIDIA cuOpt (Vincenty Base)",
-    "alasan_rekomendasi": "Matriks Vincenty memberikan urutan koordinat yang paling linier dan efisien.",
-    "status_tugas": "Perbandingan selesai. Prediksi kemacetan aktif."
+    "rekomendasi_engine_terbaik": "NVIDIA cuOpt",
+    "alasan_rekomendasi": "Lebih efisien waktu tempuh dan menghindari zona macet parah.",
+    "status_tugas": "Perbandingan selesai."
   },
   "opsi_rute": {
     "engine_nvidia_cuopt": [
@@ -59,7 +61,7 @@ FORMAT OUTPUT JSON MURNI (TANPA MARKDOWN \`\`\`json):
             "prediksi_delay_menit": 0,
             "is_lewat_tol": false,
             "is_zona_ganjil_genap": false,
-            "info_rute_tambahan": "Titik awal keberangkatan armada."
+            "info_rute_tambahan": "Titik awal armada."
           },
           {
             "urutan": 2,
@@ -73,121 +75,44 @@ FORMAT OUTPUT JSON MURNI (TANPA MARKDOWN \`\`\`json):
             "prediksi_delay_menit": 15,
             "is_lewat_tol": false,
             "is_zona_ganjil_genap": true,
-            "info_rute_tambahan": "Arus padat. Plat ganjil aman."
+            "info_rute_tambahan": "Kawasan macet. Plat ganjil aman."
           }
         ]
       }
     ],
-    "engine_mileapp_logic": [
-      {
-        "nama_run": "run-1",
-        "plat_mobil": "B1065PIE",
-        "warna_tema_run": "#0D9488",
-        "total_estimasi_delay_menit": 20,
-        "rute_kunjungan": [
-          {
-            "urutan": 1,
-            "is_titik_awal": true,
-            "nama_client": "DEPOT CIDENG (START)",
-            "koordinat": "-6.173256, 106.810057",
-            "prediksi_jam_keluar_dari_lokasi": "08:00",
-            "status_lalu_lintas": "Lancar",
-            "warna_kepadatan": "#0D9488",
-            "prediksi_delay_menit": 0,
-            "is_lewat_tol": false,
-            "is_zona_ganjil_genap": false,
-            "info_rute_tambahan": "Titik awal alternatif."
-          }
-        ]
-      }
-    ]
+    "engine_mileapp_logic": []
   }
 }`;
 
 // =====================================================================
-// 2. FORMULA VINCENTY (Akurat Elipsoid Bumi untuk Matriks Jarak)
+// 2. FORMULA VINCENTY & MATRIX BUILDER (FIX 400 ERROR)
 // =====================================================================
-function calculateVincentyDistance(coord1: [number, number], coord2: [number, number]): number {
-  const [lat1, lon1] = coord1;
-  const [lat2, lon2] = coord2;
-  if (lat1 === lat2 && lon1 === lon2) return 0;
-
-  const a = 6378137, b = 6356752.3142, f = 1 / 298.257223563;
-  const L = ((lon2 - lon1) * Math.PI) / 180;
-  const U1 = Math.atan((1 - f) * Math.tan((lat1 * Math.PI) / 180));
-  const U2 = Math.atan((1 - f) * Math.tan((lat2 * Math.PI) / 180));
-  const sinU1 = Math.sin(U1), cosU1 = Math.cos(U1);
-  const sinU2 = Math.sin(U2), cosU2 = Math.cos(U2);
-
-  let lambda = L,
-    iterLimit = 100,
-    sinLambda = 0,
-    cosLambda = 0,
-    sinSigma = 0,
-    cosSigma = 0,
-    sigma = 0,
-    sinAlpha = 0,
-    cos2Alpha = 0,
-    cos2SigmaM = 0,
-    C = 0;
-
-  do {
-    sinLambda = Math.sin(lambda);
-    cosLambda = Math.cos(lambda);
-    sinSigma = Math.sqrt(
-      cosU2 * sinLambda * (cosU2 * sinLambda) +
-        (cosU1 * sinU2 - sinU1 * cosU2 * cosLambda) * (cosU1 * sinU2 - sinU1 * cosU2 * cosLambda)
-    );
-    if (sinSigma === 0) return 0;
-    cosSigma = sinU1 * sinU2 + cosU1 * cosU2 * cosLambda;
-    sigma = Math.atan2(sinSigma, cosSigma);
-    sinAlpha = (cosU1 * cosU2 * sinLambda) / sinSigma;
-    cos2Alpha = 1 - sinAlpha * sinAlpha;
-    cos2SigmaM = cosSigma - (2 * sinU1 * sinU2) / cos2Alpha;
-    if (isNaN(cos2SigmaM)) cos2SigmaM = 0;
-    C = (f / 16) * cos2Alpha * (4 + f * (4 - 3 * cos2Alpha));
-    let lambdaPrev = lambda;
-    lambda = L + (1 - C) * f * sinAlpha * (sigma + C * sinSigma * (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM)));
-    if (Math.abs(lambda - lambdaPrev) < 1e-12) break;
-  } while (--iterLimit > 0);
-
-  const uSq = (cos2Alpha * (a * a - b * b)) / (b * b);
-  const A = 1 + (uSq / 16384) * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)));
-  const B = (uSq / 1024) * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)));
-  const deltaSigma =
-    B *
-    sinSigma *
-    (cos2SigmaM +
-      (B / 4) *
-        (cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM) -
-          (B / 6) * cos2SigmaM * (-3 + 4 * sinSigma * sinSigma) * (-3 + 4 * cos2SigmaM * cos2SigmaM)));
-
-  return (b * A * (sigma - deltaSigma)) / 1000; // Distance in KM
+function calcDistance(coord1: [number, number], coord2: [number, number]): number {
+  return parseFloat(vincentyDistance(coord1[0], coord1[1], coord2[0], coord2[1]).toFixed(4));
 }
 
-// Build Matrix Vincenty Dinamis untuk cuOpt
-function buildVincentyMatrix(atmList: { koordinat: [number, number] }[]): number[][] {
+function buildMatrix(atmList: { koordinat: [number, number] }[]): number[][] {
   const size = atmList.length;
   const matrix: number[][] = Array(size)
     .fill(0)
     .map(() => Array(size).fill(0));
   for (let i = 0; i < size; i++) {
     for (let j = 0; j < size; j++) {
-      matrix[i][j] = parseFloat(calculateVincentyDistance(atmList[i].koordinat, atmList[j].koordinat).toFixed(2));
+      matrix[i][j] = calcDistance(atmList[i].koordinat, atmList[j].koordinat);
     }
   }
   return matrix;
 }
 
 // =====================================================================
-// 3. ENGINE 1: NVIDIA cuOpt (Menggunakan Real Vincenty Matrix)
+// 3. ENGINE 1: NVIDIA cuOpt (Cepat & Stabil)
 // =====================================================================
 async function getRoutingFromCuOpt(atmList: { id?: number; plan_no?: string; nama?: string; koordinat: [number, number] }[]) {
-  console.log("-> Mengirim Matrix Vincenty ke NVIDIA cuOpt...");
-  const costMatrix = buildVincentyMatrix(atmList);
+  console.log("-> Mengirim matriks ke NVIDIA cuOpt...");
+  const costMatrix = buildMatrix(atmList);
 
   const taskLocations = Array.from({ length: atmList.length - 1 }, (_, i) => i + 1);
-  const taskIds = atmList.slice(1).map((a, i) => a.plan_no || `Task-${i + 1}`);
+  const taskIds = atmList.slice(1).map((a, i) => a.plan_no || `T-${i + 1}`);
 
   const payload = {
     action: "cuOpt_OptimizedRouting",
@@ -202,10 +127,10 @@ async function getRoutingFromCuOpt(atmList: { id?: number; plan_no?: string; nam
       },
       task_data: {
         task_locations: taskLocations.length > 0 ? taskLocations : [1],
-        task_ids: taskIds.length > 0 ? taskIds : ["Task-1"],
+        task_ids: taskIds.length > 0 ? taskIds : ["T-1"],
         demand: taskLocations.map(() => [10])
       },
-      solver_config: { time_limit: 2 }
+      solver_config: { time_limit: 1 }
     }
   };
 
@@ -227,60 +152,68 @@ async function getRoutingFromCuOpt(atmList: { id?: number; plan_no?: string; nam
       });
     }
 
-    if (response.status !== 200) throw new Error(`cuOpt status ${response.status}`);
-    const result = await response.json();
-    console.log("-> [SUCCESS] cuOpt mengembalikan rute optimal berbasis Vincenty!");
-    return result;
+    if (response.status !== 200) throw new Error(`Status ${response.status}`);
+    console.log("-> [SUCCESS] cuOpt berhasil mengurutkan!");
+    return await response.json();
   } catch (err: any) {
     console.warn("-> [WARNING cuOpt]:", err?.message || err);
-    return { fallback_sequence: atmList.map((_, i) => i) }; // Fallback sequence
+    return { fallback: "cuOpt sibuk, simulasi fallback A-B-C-D digunakan." };
   }
 }
 
 // =====================================================================
-// 4. ENGINE 2: MileApp Logic Simulator (Pembanding Alternatif)
+// 4. ENGINE 2: MileApp Simulator (Alternatif)
 // =====================================================================
 async function getRoutingFromMileApp(atmList: { koordinat: [number, number] }[]) {
-  console.log("-> Menjalankan Engine Alternatif (MileApp Logic Simulator)...");
-  // Mensimulasikan urutan alternatif untuk perbandingan A/B Testing
+  console.log("-> Mengirim ke kalkulator MileApp (Simulasi)...");
   const seq = atmList.map((_, i) => i);
   if (seq.length > 2) {
-    // Reverse intermediate stops for comparison
     const first = seq[0];
     const mid = seq.slice(1).reverse();
-    return { fallback_sequence: [first, ...mid] };
+    return { sequence: [first, ...mid] };
   }
-  return { fallback_sequence: seq };
+  return { sequence: seq };
 }
 
 // =====================================================================
-// 5. JURI PENILAI (NVIDIA Nemotron-3)
+// 5. JURI PENILAI (NEMOTRON-3) DIPERCEPAT!
 // =====================================================================
 async function evaluateAndPredict(dataMaster: any, resCuOpt: any, resMile: any) {
-  console.log("-> Nemotron-3 membandingkan rute dan memprediksi lalu lintas...");
+  console.log("-> Nemotron-3 membandingkan rute... (Mohon tunggu)");
 
-  const payloadToNemotron = {
-    data_dasar: dataMaster,
-    hasil_cuopt: resCuOpt,
-    hasil_mileapp: resMile
-  };
+  const payloadToNemotron = { data: dataMaster, opt1_cuopt: resCuOpt, opt2_mileapp: resMile };
 
   try {
     const completion = await openai.chat.completions.create({
       model: "nvidia/nemotron-3-super-120b-a12b",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: `Evaluasi dan buatkan output JSON peta interaktif untuk data berikut: ${JSON.stringify(payloadToNemotron)}`
-        }
+        { role: "user", content: `Evaluasi rute ini: ${JSON.stringify(payloadToNemotron)}` }
       ],
-      temperature: 0.1,
+      temperature: 0.0,
       top_p: 0.95,
-      max_tokens: 4096
-    });
-    console.log("-> [SUCCESS] Evaluasi Juri Selesai!");
-    return completion.choices[0]?.message?.content;
+      max_tokens: 2048,
+      reasoning_budget: 512,
+      chat_template_kwargs: { enable_thinking: true },
+      stream: false
+    } as any);
+
+    let rawResult = completion.choices[0]?.message?.content || "";
+
+    // Safe JSON Extractor
+    const jsonMatch = rawResult.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("AI tidak mengembalikan format JSON yang valid.");
+
+    const finalJson = JSON.parse(jsonMatch[0]);
+    console.log("-> [SUCCESS] Evaluasi Juri Selesai!\n");
+
+    // TAMPILKAN PEMENANG DI TERMINAL
+    console.log("=========================================");
+    console.log(`🏆 PEMENANG ALGORITMA: ${finalJson.ringkasan_operasional?.rekomendasi_engine_terbaik || "NVIDIA cuOpt"}`);
+    console.log(`💡 ALASAN: ${finalJson.ringkasan_operasional?.alasan_rekomendasi || "Optimal"}`);
+    console.log("=========================================\n");
+
+    return finalJson;
   } catch (error: any) {
     console.error("-> [ERROR Nemotron]:", error?.message || error);
     return null;
@@ -365,30 +298,16 @@ async function startServer() {
       const resMile = await getRoutingFromMileApp(atmList);
 
       // Step 3: Nemotron-3 Juri Evaluation & Traffic Prediction
-      const rawAiOutput = await evaluateAndPredict(payloadData, resCuOpt, resMile);
+      const aiOutput = await evaluateAndPredict(payloadData, resCuOpt, resMile);
 
-      if (rawAiOutput) {
-        let cleanJsonStr = rawAiOutput.trim();
-        if (cleanJsonStr.startsWith("```json")) {
-          cleanJsonStr = cleanJsonStr.replace(/^```json/, "").replace(/```$/, "").trim();
-        } else if (cleanJsonStr.startsWith("```")) {
-          cleanJsonStr = cleanJsonStr.replace(/^```/, "").replace(/```$/, "").trim();
-        }
-
-        try {
-          const parsed = JSON.parse(cleanJsonStr);
-          if (parsed && (parsed.runs || parsed.opsi_rute)) {
-            const activeRuns = parsed.runs || parsed.opsi_rute?.engine_nvidia_cuopt || [];
-            return res.json({
-              source: "nvidia_cuopt_nemotron",
-              ringkasan_operasional: parsed.ringkasan_operasional,
-              opsi_rute: parsed.opsi_rute,
-              runs: activeRuns
-            });
-          }
-        } catch (jsonErr) {
-          console.warn("-> JSON parse error from Nemotron output, using structured local solver fallback.");
-        }
+      if (aiOutput && (aiOutput.runs || aiOutput.opsi_rute)) {
+        const activeRuns = aiOutput.runs || aiOutput.opsi_rute?.engine_nvidia_cuopt || [];
+        return res.json({
+          source: "nvidia_cuopt_nemotron",
+          ringkasan_operasional: aiOutput.ringkasan_operasional,
+          opsi_rute: aiOutput.opsi_rute,
+          runs: activeRuns
+        });
       }
     } catch (pipelineErr: any) {
       console.warn("-> Pipeline warning, falling back to local Vincenty VRP Solver:", pipelineErr?.message || pipelineErr);
