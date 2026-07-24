@@ -14,7 +14,8 @@ const MILEAPP_TOKEN = process.env.MILEAPP_TOKEN || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJS
 const openai = new OpenAI({
   apiKey: NVIDIA_API_KEY,
   baseURL: 'https://integrate.api.nvidia.com/v1',
-  timeout: 60000,
+  timeout: 120000,
+  maxRetries: 2,
 });
 
 const SYSTEM_PROMPT = `
@@ -114,7 +115,8 @@ async function startServer() {
   app.get("/api/mileapp/tasks", async (req, res) => {
     try {
       console.log("-> Fetching task data from MileApp API...");
-      const response = await fetch('https://apiv2.mile.app/v1/tasks', {
+      const mileAppUrl = 'https://api.mile.app/v1/tasks';
+      const response = await fetch(mileAppUrl, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${MILEAPP_TOKEN}`,
@@ -129,7 +131,7 @@ async function startServer() {
         console.warn(`MileApp returned status ${response.status}. Using fallback PT. Advantage dataset.`);
       }
     } catch (err: any) {
-      console.error("MileApp fetch error:", err?.message || err);
+      console.warn("MileApp fetch error (ENOTFOUND/network). Using simulation dataset:", err?.message || err);
     }
 
     // Fallback PT Advantage dataset

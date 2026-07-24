@@ -22,6 +22,26 @@ const RUN_COLORS = [
   '#ca8a04', // Yellow
 ];
 
+// Asynchronous helper to fetch OSRM driving route geometry following real roads
+async function fetchRouteOSRM(waypoints: [number, number][]): Promise<[number, number][] | null> {
+  if (waypoints.length < 2) return null;
+  try {
+    // OSRM expects coordinates formatted as: lon,lat;lon,lat;...
+    const coordString = waypoints.map(([lat, lng]) => `${lng},${lat}`).join(';');
+    const url = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson`;
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data.routes && data.routes.length > 0 && data.routes[0].geometry?.coordinates) {
+      // OSRM returns array of [lng, lat], convert to Leaflet [lat, lng]
+      return data.routes[0].geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]);
+    }
+  } catch (err) {
+    console.warn('OSRM Route fetch warning:', err);
+  }
+  return null;
+}
+
 export const MapView: React.FC<MapViewProps> = ({
   runs,
   clientAtms,
@@ -80,6 +100,8 @@ export const MapView: React.FC<MapViewProps> = ({
     layerGroup.addLayer(depotMarker);
     bounds.extend([depotLat, depotLng]);
 
+    let isMounted = true;
+
     // Mode 1: Render Calculated Runs
     if (runs && runs.length > 0) {
       runs.forEach((run, runIdx) => {
@@ -88,7 +110,7 @@ export const MapView: React.FC<MapViewProps> = ({
         }
 
         const color = RUN_COLORS[runIdx % RUN_COLORS.length];
-        const latLngs: [number, number][] = [[depotLat, depotLng]];
+        const waypoints: [number, number][] = [[depotLat, depotLng]];
 
         // Group stops by coordinates to handle single-point multi-trips (Fig 7 in FSD)
         const coordMap: { [key: string]: VisitStop[] } = {};
@@ -104,7 +126,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
         Object.entries(coordMap).forEach(([coordStr, stopsAtPoint]) => {
           const [lat, lng] = coordStr.split(',').map(Number);
-          latLngs.push([lat, lng]);
+          waypoints.push([lat, lng]);
           bounds.extend([lat, lng]);
 
           const seqNumbers = stopsAtPoint.map(s => s.urutan).join('-');
@@ -143,18 +165,35 @@ export const MapView: React.FC<MapViewProps> = ({
           layerGroup.addLayer(marker);
         });
 
-        // Add return to depot route line
-        latLngs.push([depotLat, depotLng]);
+        // Add return to depot waypoint
+        waypoints.push([depotLat, depotLng]);
 
-        // Draw Polyline for this run
-        const polyline = L.polyline(latLngs, {
+        // Draw initial direct polyline as baseline
+        const initialPolyline = L.polyline(waypoints, {
           color: color,
           weight: 4,
-          opacity: 0.8,
-          dashArray: '8, 8',
+          opacity: 0.7,
+          dashArray: '6, 6',
           lineCap: 'round'
         });
-        layerGroup.addLayer(polyline);
+        layerGroup.addLayer(initialPolyline);
+
+        // Fetch OSRM actual driving road geometry asynchronously
+        fetchRouteOSRM(waypoints).then((osrmPolylineCoords) => {
+          if (!isMounted || !layerGroup) return;
+          if (osrmPolylineCoords && osrmPolylineCoords.length > 0) {
+            // Remove straight-line fallback and add smooth road polyline
+            layerGroup.removeLayer(initialPolyline);
+            const roadPolyline = L.polyline(osrmPolylineCoords, {
+              color: color,
+              weight: 5,
+              opacity: 0.9,
+              lineCap: 'round',
+              lineJoin: 'round'
+            });
+            layerGroup.addLayer(roadPolyline);
+          }
+        });
       });
     } else if (clientAtms && clientAtms.length > 0) {
       // Mode 2: Unscheduled Raw Locations Preview
@@ -197,10 +236,14 @@ export const MapView: React.FC<MapViewProps> = ({
       map.invalidateSize();
     }, 200);
 
+    return () => {
+      isMounted = false;
+    };
+
   }, [runs, clientAtms, selectedRunIndex]);
 
   return (
-    <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100">
+    <div className="relative z-0 w-full h-full rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100 min-h-[300px]">
       <div ref={mapContainerRef} style={{ height, width: '100%' }} />
     </div>
   );
