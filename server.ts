@@ -10,7 +10,7 @@ import { solveVRP } from "./src/utils/vrpSolver";
 // Hardcoded API credentials
 const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || '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';
 const CUOPT_API_KEY = process.env.CUOPT_API_KEY || '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';
-const MILEAPP_TOKEN = process.env.MILEAPP_TOKEN || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI2MWM1NzdkNDFmYzQ3NjQ1NjUxMTZlYjIiLCJqdGkiOiJkN2UzZGEzOTE1NDEzYjRiZDU5YmFkMjFhODEwYTJmMWFiNjBkZDIyMTA5NWVhMzEzMGI0NDIwNGI2YjhmM2U0YmRlZmM3MDZkMjE0ODdkYiIsImlhdCI6MTc4NDg5NzgxMSwibmJmIjoxNzg0ODk3ODExLCJleHAiOjE4MTY0MzM4MTEsInN1YiI6IjZhNjM2MTAzZDEwMjZmNDgxMjAzZTgzZiIsInNjb3BlcyI6W119.OVDpHQhBxxQGrjJpPjjWGyAHCH_I6A79lIAi0SWp57tlFYoH6yJZMReC_MTURzJvu807IUF8rrn95UHAAuohRHXJGgXSae8RbJtNZOTbi5_ZlOwpA6VPhy7_EuGWDqbxmrYVV4gk-Ve9faQqHzayyVugX2KB2V5x4HKgyqFFwSJzQjuAvTmjByRBISrArOLMyaisPWjiG_UI_OcaYeudk3yt2648e29a-8mjdsVRMhx9gadWNTWrUgeiLASfLWdcmK3NRClRxXoLSioiepIxzt17455AmZi-VS9xwHFDnnHPsqlD7Okgpm8r8Ok7HDH9vbQtOnleGbDCHiNjGjIP7M_b6LX02KCVBQXeyHNVgj37cJmB-D3XR0SFVI0hd00yj14gzwWf5eTBQ79gUqTQtG1EPtuYdhVZvjsdmkeZ853nBg9RoMuJA9NFueQBRbhGJENd9by0C4aL9A0UKRam8jIB189zffK1RXMt4L3solPeWp_JVqSw_WwlOan9jGLA71cZ44fLiovHMX6CXOsTexu9n_m2-YYfFmFw_bGDPoAONlvOBQU7MnboohNcwN52Gtt6tuaPvIeIrGZOkY1mq5aosIm6b6ykOSOBZUIgB6t35DjfcIdxd4odql2s0-DLMrm5ntG9wmjlh2wa-IiXCCG48Mr89kIPHadV2PsOMt4';
+const MILEAPP_TOKEN = process.env.MILEAPP_TOKEN || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI2MWM1NzdkNDFmYzQ3NjQ1NjUxMTZlYjIiLCJqdGkiOiJhZTAwMTM5ZWQyNGQ5N2RlYzY0ODUyYmE5ZWRkNjUyZjFmY2EwZGNlMTFjYWU5NGVkMTJiYTBiMDU5ODI0YmY3YTcxYjI2ZmJiM2MxZjIyYyIsImlhdCI6MTc4NDkwMjMzOSwibmJmIjoxNzg0OTAyMzM5LCJleHAiOjE3OTk3NzMyMDAsInN1YiI6IjZhNjM2MTAzZDEwMjZmNDgxMjAzZTgzZiIsInNjb3BlcyI6W119.NHclzW4RAg5sqvMEu0akuc2da1HQ4ZTyq4cIC3tiz3AWb03dwzwUk45UtMtc5F-s_LI3rZJ4rfspVD5QbhZHcM2YehLo72qwrnjtAm0vScwgbSzFxLbtNGc32vwiGBlDyU8uLxn8yT2WZh19dSRyb6xwau34eG1RGLJVWMGzeq2SY5B7PEgjbbD1LPX66y0K0_bMngqsOOR-zs5xUWjrhH7CbcBsiFAGU8-4AwkeHqGpNsVKL-T9Gg2cCx_vWqxwz-FIrn2WHUPIUJ5RdR0TrokMT0X140Hjtqvw7FT2cr3YVkVWR8HyMJl23ADjnclzMFMvCP58otoHMRLL1J-y4LoTCGCENjCZSaBlBYSjm2o4TfOUDKunnNr7aJC5eGDU1c89_KB-3WLHpTz_fQlq6AzMQzzwyn8OAezBW2WPRyoxi-kk35HopFaqLNGTJPsbNHPD4YdyO9MYYZhuqjisBdDgedq88t5xPyqfk_Z_Kwl73TZKvyw2b2Cz8BEZD7ZbfoBDqZ-OhAX2Uz6vnHo5QmZU_09nMplaWxcrMRtifaHpphMlIsRhxFKRDzFbDWzHLDWPHrJZsbO6TH-_zFkZz2uZ8dDglIxmKaKClOO6wEOTKZ-R4MuH9_P4KTSLwWgdbkVRAQGSRu0zIw9SSQqGkL-sX2gd1lRlAXRbONBjcbY';
 
 const openai = new OpenAI({
   apiKey: NVIDIA_API_KEY,
@@ -20,30 +20,20 @@ const openai = new OpenAI({
 });
 
 const SYSTEM_PROMPT = `
-Anda adalah sistem AI Route Planner & Vehicle Routing Problem (VRP) Solver tingkat lanjut untuk operasi Supply Chain Management dan Cash Management (pengisian ATM). Tugas Anda adalah memproses data lokasi (client/ATM), parameter operasional, dan menghasilkan "Runsheet" JSON murni yang logis, presisi, dan mematuhi aturan lalu lintas.
+Anda adalah AI Traffic & VRP Routing Analyst tingkat lanjut untuk operasi Cash Management (pengisian ATM) PT Advantage SCM. Tugas Anda adalah menerima rute dasar, menganalisis kondisi geografis jalan raya di Indonesia, dan memprediksi potensi keterlambatan operasional serta menyesuaikannya dengan aturan lalu lintas.
 
-ATURAN PERHITUNGAN & KENDALA (CONSTRAINTS) WAJIB:
-1. Optimasi Jarak & Waktu (Nearest Neighbor Logic): 
-   - Anda SANGAT DILARANG membuat rute zigzag atau melompat-lompat jauh.
-   - Di dalam satu "Run", urutan 1 ke urutan 2 WAJIB merupakan lokasi dengan koordinat terdekat secara berurutan. Setelah selesai di titik A, cari titik terdekat B, lalu dari B cari titik terdekat C, dan seterusnya. Rute harus mengalir membentuk satu garis lurus/lingkaran yang efisien.
-2. Aturan Ganjil/Genap (Wajib Patuh): 
-   - Periksa 'Tanggal Replenish' pada input.
-   - Jika Preferensi Rute mencakup "Ganjil/Genap", Anda WAJIB mengalokasikan 'plat_mobil' yang angka terakhirnya SESUAI dengan tanggal (Tanggal Ganjil = Plat Ganjil, Tanggal Genap = Plat Genap).
-3. Aturan Hindari Jalan Tol / Jalan Kecil: 
-   - Jika Preferensi Rute mencantumkan "Hindari Jalan Tol", AI harus merenggangkan (menambah) estimasi waktu tempuh antar titik karena kendaraan dipaksa melewati jalan arteri reguler.
-4. Kapasitas Kendaraan: Setiap unit mobil memiliki batas maksimal kaset 1200. Kapasitas dalam satu Run tidak boleh melebihi ini. Format output wajib "Terpakai/Maksimal" (contoh: "88/1200").
-5. Estimasi Waktu Berantai (Time Windows): Hasilkan perhitungan waktu dalam format HH:MM:
-   - Prediksi Jam Tiba di Lokasi
-   - Prediksi Jam Mulai Transaksi
-   - Durasi Transaksi (Default 15 Menit)
-   - Prediksi Jam Selesai Transaksi
-   - Prediksi Jam Keluar dari Lokasi (Berikan jeda waktu tempuh logis menuju titik rute selanjutnya berdasarkan jarak koordinat).
-6. Penugasan: Alokasikan Custody dan Pengawal secara otomatis.
+ATURAN PREDIKSI & ANALISIS (WAJIB):
+1. Prediksi Kemacetan (Traffic Prediction): Analisis jam operasional dan lokasi. Jika melewati jalan protokol di jam sibuk (07:00-09:30 atau 16:30-19:00), ubah status lalu lintas menjadi "Macet" dan berikan warna hex merah (#FF0000). Jika lancar, beri warna biru (#0088FF).
+2. Deteksi Aturan Lalu Lintas & Preferensi: 
+   - Ganjil/Genap: Cek tanggal operasional. Pastikan akhiran plat nomor kendaraan disesuaikan (Ganjil untuk tanggal ganjil, Genap untuk tanggal genap). 
+   - Hindari Tol: Jika preferensi meminta hindari jalan tol, rute harus dialihkan ke jalan arteri (is_lewat_tol: false) dan tambahkan waktu tempuh.
+3. Anti-Zigzag (Nearest Neighbor): Urutan rute (1, 2, 3) WAJIB logis berdasarkan jarak terdekat antar koordinat. Jangan melompat-lompat secara acak.
+4. Prediksi Keterlambatan (Delay): Jika statusnya "Macet", tambahkan estimasi 'prediksi_delay_menit' (contoh: 15). Sesuaikan prediksi 'jam_tiba' secara berantai. 
+5. Kapasitas Kaset: Maksimal 1200 per mobil. (Format: "Terpakai/1200").
 
-FORMAT OUTPUT:
-Anda WAJIB merespons HANYA dalam format JSON murni. Jangan berikan teks pembuka, penutup, atau markdown \`\`\`json di luar struktur JSON.
+FORMAT OUTPUT JSON YANG WAJIB ANDA HASILKAN:
+Jangan gunakan markdown pembuka/penutup \`\`\`json. Langsung keluarkan JSON murni.
 
-=== CONTOH OUTPUT YANG DIHARAPKAN (1-SHOT) ===
 {
   "ringkasan_operasional": {
     "total_run": 1,
@@ -51,8 +41,9 @@ Anda WAJIB merespons HANYA dalam format JSON murni. Jangan berikan teks pembuka,
     "kapasitas_kaset_terpakai": "88/1200",
     "total_petugas": "2 Custody, 1 Pengawal",
     "total_jarak_tempuh_km": 15.5,
-    "status_tugas": "Semua ter-assign",
-    "total_mobil": "1/10"
+    "status_tugas": "Ada Potensi Keterlambatan di Rute Sudirman",
+    "total_mobil": "1/10",
+    "total_estimasi_delay_menit": 15
   },
   "runs": [
     {
@@ -69,8 +60,8 @@ Anda WAJIB merespons HANYA dalam format JSON murni. Jangan berikan teks pembuka,
           "urutan": 1,
           "plan_no": "PL-20260600044",
           "nama_client": "GBK",
-          "alamat": "Jakarta Cideng",
-          "koordinat": "-6.17325608744272, 106.81005796779833",
+          "alamat": "Jakarta Pusat",
+          "koordinat": "-6.21462, 106.80159",
           "status_atm": "RS",
           "tipe_trip": "H",
           "jam_buka_tutup": "08:00 - 22:00",
@@ -78,22 +69,34 @@ Anda WAJIB merespons HANYA dalam format JSON murni. Jangan berikan teks pembuka,
           "prediksi_jam_tiba_di_lokasi": "08:30",
           "prediksi_jam_mulai_transaksi": "08:30",
           "prediksi_jam_selesai_transaksi": "08:45",
-          "prediksi_jam_keluar_dari_lokasi": "08:45"
+          "prediksi_jam_keluar_dari_lokasi": "08:45",
+          "status_lalu_lintas": "Macet",
+          "warna_jalur": "#FF0000",
+          "is_zona_ganjil_genap": true,
+          "is_lewat_tol": false,
+          "prediksi_delay_menit": 15,
+          "keterangan_ai": "Kawasan GBK padat di pagi hari. Estimasi terlambat 15 menit. Plat ganjil aman."
         },
         {
           "urutan": 2,
           "plan_no": "PL-20260601372",
           "nama_client": "MOBIL KELILING KAS",
           "alamat": "Jakarta Cideng",
-          "koordinat": "-6.174000, 106.811000",
+          "koordinat": "-6.17400, 106.81100",
           "status_atm": "RS",
           "tipe_trip": "H",
           "jam_buka_tutup": "08:00 - 22:00",
           "durasi_transaksi_menit": 15,
-          "prediksi_jam_tiba_di_lokasi": "08:50",
-          "prediksi_jam_mulai_transaksi": "08:50",
-          "prediksi_jam_selesai_transaksi": "09:05",
-          "prediksi_jam_keluar_dari_lokasi": "09:05"
+          "prediksi_jam_tiba_di_lokasi": "09:20",
+          "prediksi_jam_mulai_transaksi": "09:20",
+          "prediksi_jam_selesai_transaksi": "09:35",
+          "prediksi_jam_keluar_dari_lokasi": "09:35",
+          "status_lalu_lintas": "Lancar",
+          "warna_jalur": "#0088FF",
+          "is_zona_ganjil_genap": false,
+          "is_lewat_tol": true,
+          "prediksi_delay_menit": 0,
+          "keterangan_ai": "Jalan Tol dalam kota relatif lancar."
         }
       ]
     }

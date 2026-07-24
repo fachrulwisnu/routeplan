@@ -40,6 +40,12 @@ export interface VisitStop {
   prediksi_jam_selesai_transaksi: string; // "08:45"
   prediksi_jam_keluar_dari_lokasi: string; // "08:45"
   kebutuhan_kaset?: number;
+  status_lalu_lintas?: 'Macet' | 'Lancar' | string;
+  warna_jalur?: string; // "#FF0000" or "#0088FF"
+  is_zona_ganjil_genap?: boolean;
+  is_lewat_tol?: boolean;
+  prediksi_delay_menit?: number;
+  keterangan_ai?: string;
 }
 
 export interface PetugasDetail {
@@ -69,6 +75,7 @@ export interface OperationalSummary {
   total_jarak_tempuh_km: number; // 45.5
   status_tugas: string; // "Semua ter-assign"
   total_mobil: string; // "3/10"
+  total_estimasi_delay_menit?: number;
 }
 
 export interface RunsheetResponse {

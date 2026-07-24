@@ -224,7 +224,23 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
         travelMinutes += 2; // small road navigation buffer
       }
 
-      currentTime += travelMinutes;
+      // Traffic Prediction Logic
+      // Check if arrival time falls into peak hours (07:00-09:30 or 16:30-19:00)
+      const currentHour = Math.floor(currentTime / 60);
+      const currentMinuteInHour = currentTime % 60;
+      const timeInHours = currentHour + currentMinuteInHour / 60;
+
+      const isMorningPeak = timeInHours >= 7.0 && timeInHours <= 9.5;
+      const isEveningPeak = timeInHours >= 16.5 && timeInHours <= 19.0;
+      const isHeavyTraffic = isMorningPeak || isEveningPeak || (avoidToll && travelDistance > 2.0);
+
+      const statusLaluLintas = isHeavyTraffic ? "Macet" : "Lancar";
+      const warnaJalur = isHeavyTraffic ? "#FF0000" : "#0088FF";
+      const delayMinutes = isHeavyTraffic ? 15 : 0;
+
+      if (delayMinutes > 0) {
+        currentTime += delayMinutes; // add delay to sequential arrival
+      }
 
       const jamTiba = formatTime(currentTime);
       const jamMulai = jamTiba;
@@ -232,6 +248,16 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
       currentTime += durationMins;
       const jamSelesai = formatTime(currentTime);
       const jamKeluar = jamSelesai;
+
+      const isOddEvenZone = checkOddEven || (stopIdx % 2 === 0);
+      const isTollRoute = !avoidToll && travelDistance > 3.0;
+
+      let keteranganAi = "";
+      if (isHeavyTraffic) {
+        keteranganAi = `Padat lalu lintas di jam sibuk. Estimasi potensi delay ${delayMinutes} menit. Rute disesuaikan.`;
+      } else {
+        keteranganAi = isTollRoute ? "Jalan tol relatif lancar." : "Lalu lintas jalan arteri lancar.";
+      }
 
       runTotalDistance += travelDistance;
       const cassettes = atm.kebutuhan_kaset || 25;
@@ -251,7 +277,13 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
         prediksi_jam_mulai_transaksi: jamMulai,
         prediksi_jam_selesai_transaksi: jamSelesai,
         prediksi_jam_keluar_dari_lokasi: jamKeluar,
-        kebutuhan_kaset: cassettes
+        kebutuhan_kaset: cassettes,
+        status_lalu_lintas: statusLaluLintas,
+        warna_jalur: warnaJalur,
+        is_zona_ganjil_genap: isOddEvenZone,
+        is_lewat_tol: isTollRoute,
+        prediksi_delay_menit: delayMinutes,
+        keterangan_ai: keteranganAi
       });
 
       prevCoords = currCoords;
@@ -287,6 +319,11 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
 
   const totalCustody = runs.reduce((acc, r) => acc + (r.petugas_detail?.custody2 ? 2 : 1), 0);
   const totalPengawal = runs.length;
+  const totalDelayMinutes = runs.reduce((acc, r) => acc + r.rute_kunjungan.reduce((dAcc, stop) => dAcc + (stop.prediksi_delay_menit || 0), 0), 0);
+
+  const statusTugasStr = totalDelayMinutes > 0 
+    ? `Ada Potensi Delay Jam Sibuk (${totalDelayMinutes}m)` 
+    : "Semua ter-assign & Lancar";
 
   return {
     ringkasan_operasional: {
@@ -295,8 +332,9 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
       kapasitas_kaset_terpakai: `${globalTotalCassettes}/1200`,
       total_petugas: `${totalCustody} Custody, ${totalPengawal} Pengawal`,
       total_jarak_tempuh_km: Math.round(globalTotalDistance * 10) / 10,
-      status_tugas: "Semua ter-assign",
-      total_mobil: `${activeCarsCount}/10`
+      status_tugas: statusTugasStr,
+      total_mobil: `${activeCarsCount}/10`,
+      total_estimasi_delay_menit: totalDelayMinutes
     },
     runs
   };

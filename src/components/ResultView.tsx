@@ -116,7 +116,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3">
           {/* Total Run */}
           <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-3 flex items-center gap-3">
             <div className="p-2.5 bg-blue-600 text-white rounded-lg shrink-0">
@@ -179,7 +179,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
             </div>
             <div>
               <span className="text-[10px] font-bold text-slate-500 uppercase block">STATUS TUGAS</span>
-              <div className="text-xs font-bold text-teal-800">{ringkasan_operasional.status_tugas}</div>
+              <div className="text-xs font-bold text-teal-800 line-clamp-2">{ringkasan_operasional.status_tugas}</div>
             </div>
           </div>
 
@@ -191,6 +191,19 @@ export const ResultView: React.FC<ResultViewProps> = ({
             <div>
               <span className="text-[10px] font-bold text-slate-500 uppercase block">TOTAL MOBIL</span>
               <div className="text-base font-black text-slate-900">{ringkasan_operasional.total_mobil}</div>
+            </div>
+          </div>
+
+          {/* Total Estimasi Delay */}
+          <div className="bg-red-50/80 border border-red-200 rounded-xl p-3 flex items-center gap-3">
+            <div className="p-2.5 bg-red-600 text-white rounded-lg shrink-0">
+              <Clock className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-red-600 uppercase block">ESTIMASI DELAY</span>
+              <div className="text-base font-black text-red-700">
+                {ringkasan_operasional.total_estimasi_delay_menit || 0} Menit
+              </div>
             </div>
           </div>
         </div>
@@ -401,7 +414,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
                 </div>
               </div>
 
-              {/* Sequential HH:MM Chained Predictions */}
+              {/* Sequential HH:MM Chained Predictions & AI Traffic Analysis */}
               <div className="mt-3 p-3 bg-white rounded-xl border border-slate-200/80 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                 <div>
                   <span className="text-[10px] text-slate-500 font-semibold block">Prediksi Jam Tiba</span>
@@ -431,6 +444,55 @@ export const ResultView: React.FC<ResultViewProps> = ({
                   </span>
                 </div>
               </div>
+
+              {/* AI Traffic & Route Badges */}
+              {(stop.status_lalu_lintas || stop.keterangan_ai || stop.is_zona_ganjil_genap !== undefined) && (
+                <div className="mt-3 pt-2 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Status Lalu Lintas Badge */}
+                    {stop.status_lalu_lintas && (
+                      <span
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-black text-white flex items-center gap-1 shadow-xs"
+                        style={{ backgroundColor: stop.warna_jalur || (stop.status_lalu_lintas === 'Macet' ? '#FF0000' : '#0088FF') }}
+                      >
+                        🚦 Lalu Lintas: {stop.status_lalu_lintas}
+                      </span>
+                    )}
+
+                    {/* Delay Badge */}
+                    {stop.prediksi_delay_menit !== undefined && stop.prediksi_delay_menit > 0 && (
+                      <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-lg text-[11px] font-extrabold border border-red-200">
+                        ⏱️ +{stop.prediksi_delay_menit}m Potensi Delay
+                      </span>
+                    )}
+
+                    {/* Zona Ganjil Genap */}
+                    {stop.is_zona_ganjil_genap !== undefined && (
+                      <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
+                        stop.is_zona_ganjil_genap
+                          ? 'bg-amber-50 text-amber-800 border-amber-200'
+                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}>
+                        🚘 Ganjil-Genap: {stop.is_zona_ganjil_genap ? 'Ya (Aturan Berlaku)' : 'Bukan Zona'}
+                      </span>
+                    )}
+
+                    {/* Lewat Tol */}
+                    {stop.is_lewat_tol !== undefined && (
+                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] font-bold">
+                        🛣️ Rute: {stop.is_lewat_tol ? 'Lewat Jalan Tol' : 'Jalan Arteri'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Keterangan AI Callout */}
+                  {stop.keterangan_ai && (
+                    <div className="w-full mt-1.5 p-2 bg-blue-50/70 border border-blue-200/60 rounded-xl text-[11px] text-blue-900 font-medium">
+                      🤖 <span className="font-bold">Analisis AI Traffic:</span> {stop.keterangan_ai}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
