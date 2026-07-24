@@ -22,24 +22,20 @@ const openai = new OpenAI({
 });
 
 // MASTER SYSTEM PROMPT FOR NEMOTRON-3 JURI ANALYST
-const SYSTEM_PROMPT = `Anda adalah Juri Algoritma VRP (Vehicle Routing Problem). Tugas Anda membandingkan dua urutan rute (NVIDIA cuOpt vs MileApp), memprediksi kepadatan jalan di Jakarta secara realistis, dan memberikan rekomendasi rute terbaik.
+const SYSTEM_PROMPT = `Anda adalah Juri Algoritma VRP. Bandingkan 2 rute (cuOpt vs MileApp), prediksi macet, dan kembalikan JSON secepat mungkin.
 
-ATURAN PREDIKSI & PEWARNAAN (WAJIB):
-1. Tema Run: Gunakan warna elegan (Ungu #9333EA, Teal #0D9488, Pink #DB2777). DILARANG pakai Merah/Kuning/Hijau/Biru untuk tema.
-2. Kepadatan Jalan (Warna Garis): 
-   - Lancar: Delay 0 menit, warna = warna tema run.
-   - Padat: Delay 5-10 menit, warna = #F97316 (Orange).
-   - Macet: Delay 15+ menit, warna = #EF4444 (Merah tebal).
-3. Aturan Jalan: Berikan info jika rute masuk tol ('is_lewat_tol') atau area ganjil genap ('is_zona_ganjil_genap') pada 'info_rute_tambahan'.
-4. Juri: Bandingkan rute mana yang paling urut, logis, dan tidak zigzag, lalu tetapkan pemenangnya di 'rekomendasi_engine_terbaik'.
+ATURAN KETAT:
+1. Tema Run: Gunakan "#9333EA", "#0D9488", atau "#DB2777".
+2. Macet: 'warna_kepadatan'="#EF4444", isi 'prediksi_delay_menit'.
+3. Padat: 'warna_kepadatan'="#F97316". Lancar: Samakan with tema.
+4. Tol & Ganjil/Genap: Deteksi berdasar lokasi Jakarta. Waktu (HH:MM) harus berantai.
+5. SINGKAT & CEPAT: Jangan berikan penjelasan panjang. Langsung output JSON.
 
-FORMAT OUTPUT:
-KEMBALIKAN HANYA JSON MURNI. DILARANG MENGGUNAKAN MARKDOWN \`\`\`json. DILARANG MEMBERIKAN TEKS PEMBUKA ATAU PENUTUP. DIMULAI DENGAN { DAN DIAKHIRI DENGAN }.
-
+FORMAT OUTPUT WAJIB (JSON MURNI TANPA MARKDOWN):
 {
   "ringkasan_operasional": {
     "rekomendasi_engine_terbaik": "NVIDIA cuOpt",
-    "alasan_rekomendasi": "Lebih efisien waktu tempuh dan menghindari zona macet parah.",
+    "alasan_rekomendasi": "Waktu tempuh lebih singkat.",
     "status_tugas": "Perbandingan selesai."
   },
   "opsi_rute": {
@@ -113,12 +109,12 @@ async function getRoutingFromCuOpt(atmList: { id?: number; plan_no?: string; nam
 
   const taskLocations: number[] = [];
   const taskIds: string[] = [];
-  const demands: number[][] = [];
+  const demandsDim1: number[] = []; // KUNCI FIX 400: Semua demand digabung dalam 1 dimensi
 
   for (let i = 1; i < atmList.length; i++) {
     taskLocations.push(i);
     taskIds.push(atmList[i].plan_no || `Task-${i}`);
-    demands.push([10]); // Asumsi butuh 10 kaset per ATM
+    demandsDim1.push(10); // Asumsi 10 kaset per ATM
   }
 
   const payload = {
@@ -135,7 +131,7 @@ async function getRoutingFromCuOpt(atmList: { id?: number; plan_no?: string; nam
       task_data: {
         task_locations: taskLocations,
         task_ids: taskIds,
-        demand: demands
+        demand: [demandsDim1] // Format array dimensi: [ [10, 10, 10, ...] ]
       },
       solver_config: { time_limit: 2 }
     }

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ClientATM, RoutePlanRequest } from '../types';
 import { BRANCHES, CYCLES, ROUTE_PREFERENCES } from '../data/initialData';
 import { MapView } from './MapView';
-import { ChevronDown, ChevronUp, MapPin, Search, Sparkles, Building2, Calendar, ShieldAlert } from 'lucide-react';
+import { ChevronDown, ChevronUp, MapPin, Search, Sparkles, Building2, Calendar, ShieldAlert, Cpu, CheckCircle2 } from 'lucide-react';
 
 interface GenerateViewProps {
   clientAtms: ClientATM[];
@@ -21,6 +21,34 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
   const [selectedPreferences, setSelectedPreferences] = useState<string[]>(['Ganjil/Genap']);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
+  const [loadingStep, setLoadingStep] = useState<number>(1);
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setLoadingStep(1);
+      return;
+    }
+
+    setLoadingStep(1);
+    const t1 = setTimeout(() => setLoadingStep(2), 2000);
+    const t2 = setTimeout(() => setLoadingStep(3), 4000);
+    const t3 = setTimeout(() => setLoadingStep(4), 8000);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [isGenerating]);
+
+  const stepDetails = [
+    { step: 1, label: "Menarik Data ATM dari Sistem...", percent: 25 },
+    { step: 2, label: "Menghitung Matriks Jarak Vincenty...", percent: 50 },
+    { step: 3, label: "Mengoptimasi Rute dengan NVIDIA cuOpt...", percent: 75 },
+    { step: 4, label: "AI Nemotron Memprediksi Kepadatan Lalu Lintas...", percent: 90 },
+  ];
+
+  const currentStepInfo = stepDetails.find(s => s.step === loadingStep) || stepDetails[0];
 
   const togglePreference = (pref: string) => {
     if (selectedPreferences.includes(pref)) {
@@ -218,6 +246,43 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
           </div>
         </div>
 
+        {/* Interactive Progress Bar when Generating */}
+        {isGenerating && (
+          <div className="bg-slate-900 text-white p-4 rounded-xl border border-slate-700 shadow-md space-y-3 transition-all animate-fade-in">
+            <div className="flex items-center justify-between text-xs font-bold">
+              <span className="flex items-center gap-2 text-blue-400">
+                <Cpu className="w-4 h-4 animate-pulse text-emerald-400" />
+                {currentStepInfo.label}
+              </span>
+              <span className="text-emerald-400 font-mono text-xs">{currentStepInfo.percent}%</span>
+            </div>
+
+            {/* Smooth Animated Progress Bar */}
+            <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-slate-700/50">
+              <div
+                className="bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 h-full rounded-full transition-all duration-700 ease-out shadow-sm"
+                style={{ width: `${currentStepInfo.percent}%` }}
+              />
+            </div>
+
+            {/* Step Indicators */}
+            <div className="grid grid-cols-4 gap-1.5 pt-1">
+              {stepDetails.map((s) => (
+                <div key={s.step} className="space-y-1">
+                  <div
+                    className={`h-1.5 rounded-full transition-colors duration-300 ${
+                      loadingStep >= s.step ? 'bg-emerald-400 shadow-xs' : 'bg-slate-700'
+                    }`}
+                  />
+                  <div className="text-[9px] font-semibold text-center text-slate-400 truncate">
+                    Step {s.step}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Generate Runsheet Primary Button */}
         <button
           disabled={isGenerating}
@@ -227,7 +292,7 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
           {isGenerating ? (
             <>
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>Memproses VRP AI Solver...</span>
+              <span>MEMPROSES AI VRP SOLVER ({currentStepInfo.percent}%)...</span>
             </>
           ) : (
             <>
