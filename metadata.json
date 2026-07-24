@@ -1,0 +1,6 @@
+{
+  "name": "Route Plan AI",
+  "description": "AI-Powered Route Planner & VRP Solver for Cash Management & ATM Replenishment Operations (PT. Advantage SCM)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
