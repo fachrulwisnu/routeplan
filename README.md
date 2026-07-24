@@ -49,9 +49,12 @@ Mengelompokkan lokasi ATM ke dalam *Run* berdasarkan isolasi wilayah geografis y
 
 ### 3. 🚦 Real-Time AI Traffic Analysis & Delay Prediction
 Menganalisis kepadatan lalu lintas arteri & tol Jakarta secara otomatis:
-- 🔴 **Macet Parah (`#EF4444`)**: Terjadi pada jam sibuk (07:00-09:30 / 16:30-19:00) dengan estimasi delay tambahan (+20 menit).
-- 🟡 **Padat Merayap (`#F59E0B`)**: Terjadi pada jam sibuk siang hari atau rute non-tol (+10 menit delay).
-- 🔵 **Lancar (`#3B82F6`)**: Rute bergerak lancar tanpa hambatan berarti (0 menit delay).
+- 🔴 **Macet (`#EF4444`)**: Terjadi pada jam sibuk (07:00-09:30 / 16:30-19:00) dengan estimasi delay tambahan (+15 menit). Garis polyline ditampilkan tebal dengan garis putus-putus peringatan (`weight: 8, dashArray: '5, 10'`).
+- 🟠 **Padat (`#F97316`)**: Terjadi pada jam sibuk siang hari atau rute non-tol (+10 menit delay). Garis polyline ditampilkan tebal dengan garis putus-putus (`weight: 8, dashArray: '5, 10'`).
+- 🟣 **Lancar (`warna_tema_run`)**: Rute bergerak lancar tanpa hambatan berarti (0 menit delay). Menggunakan warna tema eksklusif Run (Ungu `#9333EA`, Teal `#0D9488`, Pink `#DB2777`, Indigo `#4F46E5`).
+
+### 4. 🎨 Exclusive Run Theme Palette (Anti-Overlap Colors)
+Dilarang menggunakan warna Biru, Hijau, Kuning, atau Merah untuk tema Run. Setiap Run diberikan warna tema elegan eksklusif untuk menghindari ambiguitas visual di peta.
 
 ### 4. 🗺️ Advanced Leaflet Map Visualization
 - **Floating Route Badges:** Badge mengambang tepat di titik tengah segmen polyline menampilkan status real-time (`[Macet +20m]`, `[TOL]`, `[G/G]`).

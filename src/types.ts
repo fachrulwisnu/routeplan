@@ -84,9 +84,16 @@ export interface OperationalSummary {
   alasan_rekomendasi?: string;
 }
 
+export interface OpsiRute {
+  engine_nvidia_cuopt?: Run[];
+  engine_mileapp_logic?: Run[];
+}
+
 export interface RunsheetResponse {
   ringkasan_operasional: OperationalSummary;
   runs: Run[];
+  opsi_rute?: OpsiRute;
+  source?: string;
 }
 
 export interface VehicleOption {
