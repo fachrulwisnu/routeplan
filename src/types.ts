@@ -44,6 +44,7 @@ export interface VisitStop {
   warna_jalur?: string; // "#FF0000" or "#0088FF"
   is_zona_ganjil_genap?: boolean;
   is_lewat_tol?: boolean;
+  is_titik_awal?: boolean;
   prediksi_delay_menit?: number;
   keterangan_ai?: string;
 }

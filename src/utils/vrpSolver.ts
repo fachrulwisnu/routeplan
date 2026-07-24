@@ -225,18 +225,26 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
       }
 
       // Traffic Prediction Logic
-      // Check if arrival time falls into peak hours (07:00-09:30 or 16:30-19:00)
       const currentHour = Math.floor(currentTime / 60);
       const currentMinuteInHour = currentTime % 60;
       const timeInHours = currentHour + currentMinuteInHour / 60;
 
-      const isMorningPeak = timeInHours >= 7.0 && timeInHours <= 9.5;
-      const isEveningPeak = timeInHours >= 16.5 && timeInHours <= 19.0;
-      const isHeavyTraffic = isMorningPeak || isEveningPeak || (avoidToll && travelDistance > 2.0);
+      const isPeakHours = (timeInHours >= 7.0 && timeInHours <= 9.5) || (timeInHours >= 16.5 && timeInHours <= 19.0);
+      const isMiddayBusy = timeInHours >= 11.5 && timeInHours <= 14.0;
 
-      const statusLaluLintas = isHeavyTraffic ? "Macet" : "Lancar";
-      const warnaJalur = isHeavyTraffic ? "#FF0000" : "#0088FF";
-      const delayMinutes = isHeavyTraffic ? 15 : 0;
+      let statusLaluLintas = "Lancar";
+      let warnaJalur = "#3B82F6"; // Blue
+      let delayMinutes = 0;
+
+      if (isPeakHours) {
+        statusLaluLintas = "Macet Parah";
+        warnaJalur = "#EF4444"; // Red
+        delayMinutes = 20;
+      } else if (isMiddayBusy || (avoidToll && travelDistance > 1.5)) {
+        statusLaluLintas = "Padat";
+        warnaJalur = "#F59E0B"; // Yellow/Orange
+        delayMinutes = 10;
+      }
 
       if (delayMinutes > 0) {
         currentTime += delayMinutes; // add delay to sequential arrival
@@ -253,8 +261,10 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
       const isTollRoute = !avoidToll && travelDistance > 3.0;
 
       let keteranganAi = "";
-      if (isHeavyTraffic) {
-        keteranganAi = `Padat lalu lintas di jam sibuk. Estimasi potensi delay ${delayMinutes} menit. Rute disesuaikan.`;
+      if (statusLaluLintas === "Macet Parah") {
+        keteranganAi = `Macet parah di jam sibuk. Estimasi potensi delay ${delayMinutes} menit. Rute disesuaikan.`;
+      } else if (statusLaluLintas === "Padat") {
+        keteranganAi = `Lalu lintas padat merayap. Estimasi potensi delay ${delayMinutes} menit.`;
       } else {
         keteranganAi = isTollRoute ? "Jalan tol relatif lancar." : "Lalu lintas jalan arteri lancar.";
       }
@@ -265,6 +275,7 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
 
       stops.push({
         urutan: stopIdx + 1,
+        is_titik_awal: stopIdx === 0,
         plan_no: atm.plan_no,
         nama_client: atm.nama_client,
         alamat: atm.alamat,
