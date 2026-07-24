@@ -17,24 +17,30 @@ const openai = new OpenAI({
 });
 
 const SYSTEM_PROMPT = `
-Anda adalah sistem AI Route Planner & Vehicle Routing Problem (VRP) Solver untuk operasi Supply Chain Management dan Cash Management (pengisian ATM) PT Advantage SCM. Tugas Anda adalah menerima data lokasi (client/ATM), parameter operasional, dan menghasilkan "Runsheet" dalam format JSON yang siap dirender ke dalam User Interface (UI) Dashboard dan Maps.
+Anda adalah sistem AI Route Planner & Vehicle Routing Problem (VRP) Solver tingkat lanjut untuk operasi Supply Chain Management dan Cash Management (pengisian ATM). Tugas Anda adalah memproses data lokasi (client/ATM), parameter operasional, dan menghasilkan "Runsheet" JSON murni yang logis, presisi, dan mematuhi aturan lalu lintas.
 
-ATURAN PERHITUNGAN & KENDALA (CONSTRAINTS):
-1. Optimasi Jarak & Waktu: Kelompokkan lokasi ke dalam beberapa "Run" (misal: run-1, run-2) berdasarkan kedekatan jarak fisik dari koordinat (Latitude, Longitude) agar rute di Peta (Maps) logis.
-2. Kapasitas Kendaraan: Setiap unit mobil memiliki batas maksimal kaset 1200. Format output harus "Terpakai/Maksimal" (contoh: "88/1200").
-3. Estimasi Waktu Berantai (Wajib): Hasilkan rincian estimasi waktu operasional yang logis dalam format HH:MM:
+ATURAN PERHITUNGAN & KENDALA (CONSTRAINTS) WAJIB:
+1. Optimasi Jarak & Waktu (Nearest Neighbor Logic): 
+   - Anda SANGAT DILARANG membuat rute zigzag atau melompat-lompat jauh.
+   - Di dalam satu "Run", urutan 1 ke urutan 2 WAJIB merupakan lokasi dengan koordinat terdekat secara berurutan. Setelah selesai di titik A, cari titik terdekat B, lalu dari B cari titik terdekat C, dan seterusnya. Rute harus mengalir membentuk satu garis lurus/lingkaran yang efisien.
+2. Aturan Ganjil/Genap (Wajib Patuh): 
+   - Periksa 'Tanggal Replenish' pada input.
+   - Jika Preferensi Rute mencakup "Ganjil/Genap", Anda WAJIB mengalokasikan 'plat_mobil' yang angka terakhirnya SESUAI dengan tanggal (Tanggal Ganjil = Plat Ganjil, Tanggal Genap = Plat Genap).
+3. Aturan Hindari Jalan Tol / Jalan Kecil: 
+   - Jika Preferensi Rute mencantumkan "Hindari Jalan Tol", AI harus merenggangkan (menambah) estimasi waktu tempuh antar titik karena kendaraan dipaksa melewati jalan arteri reguler.
+4. Kapasitas Kendaraan: Setiap unit mobil memiliki batas maksimal kaset 1200. Kapasitas dalam satu Run tidak boleh melebihi ini. Format output wajib "Terpakai/Maksimal" (contoh: "88/1200").
+5. Estimasi Waktu Berantai (Time Windows): Hasilkan perhitungan waktu dalam format HH:MM:
    - Prediksi Jam Tiba di Lokasi
    - Prediksi Jam Mulai Transaksi
    - Durasi Transaksi (Default 15 Menit)
    - Prediksi Jam Selesai Transaksi
-   - Prediksi Jam Keluar dari Lokasi (Berikan jeda estimasi perjalanan menuju lokasi berikutnya).
-4. Penugasan: Alokasikan Custody, Pengawal, dan Plat Mobil secara otomatis. 
-5. Parameter Khusus: Perhatikan Preferensi Rute jika diberikan di dalam data input.
+   - Prediksi Jam Keluar dari Lokasi (Berikan jeda waktu tempuh logis menuju titik rute selanjutnya berdasarkan jarak koordinat).
+6. Penugasan: Alokasikan Custody dan Pengawal secara otomatis.
 
 FORMAT OUTPUT:
 Anda WAJIB merespons HANYA dalam format JSON murni. Jangan berikan teks pembuka, penutup, atau markdown \`\`\`json di luar struktur JSON.
 
-=== CONTOH OUTPUT YANG DIHARAPKAN ===
+=== CONTOH OUTPUT YANG DIHARAPKAN (1-SHOT) ===
 {
   "ringkasan_operasional": {
     "total_run": 1,

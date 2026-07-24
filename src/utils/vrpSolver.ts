@@ -43,6 +43,42 @@ function formatDuration(minutes: number): string {
   return `${h}j ${m}m`;
 }
 
+// Helper to extract last numeric digit of a plate string like "B1065PIE"
+function getPlateLastDigit(platNomor: string): number {
+  const digits = platNomor.replace(/\D/g, '');
+  if (!digits) return 0;
+  return parseInt(digits[digits.length - 1], 10);
+}
+
+// Helper to sort ATMs in a group using Nearest Neighbor TSP algorithm
+function nearestNeighborSort(group: ClientATM[], startDepot: { lat: number; lng: number }): ClientATM[] {
+  if (group.length <= 1) return [...group];
+
+  const unvisited = [...group];
+  const sorted: ClientATM[] = [];
+  let currentPos = startDepot;
+
+  while (unvisited.length > 0) {
+    let nearestIdx = 0;
+    let minDistance = Infinity;
+
+    for (let i = 0; i < unvisited.length; i++) {
+      const coords = parseCoords(unvisited[i].koordinat);
+      const dist = haversineKm(currentPos.lat, currentPos.lng, coords.lat, coords.lng);
+      if (dist < minDistance) {
+        minDistance = dist;
+        nearestIdx = i;
+      }
+    }
+
+    const nextAtm = unvisited.splice(nearestIdx, 1)[0];
+    sorted.push(nextAtm);
+    currentPos = parseCoords(nextAtm.koordinat);
+  }
+
+  return sorted;
+}
+
 export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
   const atms = [...(request.data_atm || [])];
   if (atms.length === 0) {
@@ -60,18 +96,49 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
     };
   }
 
+  // Parse replenish day for Odd/Even plate constraint
+  const dateStr = request.tanggal_replenish || "02 Jun 2026";
+  const dayMatch = dateStr.match(/\d+/);
+  const dayNumber = dayMatch ? parseInt(dayMatch[0], 10) : 2;
+  const isEvenDay = dayNumber % 2 === 0;
+
+  const preferensi = request.preferensi_rute || [];
+  const checkOddEven = preferensi.includes("Ganjil/Genap");
+  const avoidToll = preferensi.includes("Hindari Jalan Tol");
+  const avoidSmallRoads = preferensi.includes("Hindari Jalan Kecil");
+
+  // Determine average speed: 18 km/h if avoiding tolls (arterial roads), else 30 km/h
+  const avgSpeedKmH = avoidToll ? 18 : 30;
+
+  // Filter vehicles matching Odd/Even constraint if required
+  let eligibleVehicles = [...FLEET_VEHICLES];
+  if (checkOddEven) {
+    const matched = FLEET_VEHICLES.filter(v => {
+      const lastDigit = getPlateLastDigit(v.plat_nomor);
+      return isEvenDay ? (lastDigit % 2 === 0) : (lastDigit % 2 !== 0);
+    });
+    if (matched.length > 0) {
+      eligibleVehicles = matched;
+    }
+  }
+
   // Group ATMs into clusters (Max 1200 cassettes per run or ~6-8 stops per run)
   const MAX_CASSETTES_PER_RUN = 1200;
   const MAX_STOPS_PER_RUN = 7;
 
-  // Simple Spatial Clustering: Sort by Latitude + Longitude
+  // Depot location: PT Advantage Cideng (-6.173256, 106.810058)
+  const depotCoords = { lat: -6.173256, lng: 106.810058 };
+
+  // Spatial Clustering: Sort by distance to Depot
   atms.sort((a, b) => {
     const cA = parseCoords(a.koordinat);
     const cB = parseCoords(b.koordinat);
-    return (cA.lat + cA.lng) - (cB.lat + cB.lng);
+    const dA = haversineKm(depotCoords.lat, depotCoords.lng, cA.lat, cA.lng);
+    const dB = haversineKm(depotCoords.lat, depotCoords.lng, cB.lat, cB.lng);
+    return dA - dB;
   });
 
-  const runGroups: ClientATM[][] = [];
+  const rawGroups: ClientATM[][] = [];
   let currentGroup: ClientATM[] = [];
   let currentCassettes = 0;
 
@@ -82,7 +149,7 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
       currentCassettes + cassettes > MAX_CASSETTES_PER_RUN
     ) {
       if (currentGroup.length > 0) {
-        runGroups.push(currentGroup);
+        rawGroups.push(currentGroup);
       }
       currentGroup = [atm];
       currentCassettes = cassettes;
@@ -92,7 +159,7 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
     }
   }
   if (currentGroup.length > 0) {
-    runGroups.push(currentGroup);
+    rawGroups.push(currentGroup);
   }
 
   // Base start time based on cycle
@@ -106,10 +173,13 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
   let globalTotalCassettes = 0;
   let activeCarsCount = 0;
 
-  runGroups.forEach((group, index) => {
+  rawGroups.forEach((rawGroup, index) => {
+    // Apply strict Nearest Neighbor TSP ordering for each run!
+    const group = nearestNeighborSort(rawGroup, depotCoords);
+
     const runName = `run-${index + 1}`;
     const staffIndex = index % STAFF_OFFICERS.length;
-    const vehicleObj = FLEET_VEHICLES[index % FLEET_VEHICLES.length];
+    const vehicleObj = eligibleVehicles[index % eligibleVehicles.length];
     activeCarsCount++;
 
     const officers = STAFF_OFFICERS[staffIndex];
@@ -130,22 +200,28 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
     let runTotalCassettes = 0;
     const stops: VisitStop[] = [];
 
-    let prevCoords = parseCoords(group[0]?.koordinat || "-6.173256, 106.810058");
+    let prevCoords = depotCoords;
 
     group.forEach((atm, stopIdx) => {
       const currCoords = parseCoords(atm.koordinat);
       let travelDistance = haversineKm(prevCoords.lat, prevCoords.lng, currCoords.lat, currCoords.lng);
-      // Round travel distance to 1 decimal place
       travelDistance = Math.round(travelDistance * 10) / 10;
       
-      // Travel duration in minutes (assume average speed ~30 km/h in Jakarta + minimum 2 mins if different place)
+      // Calculate travel duration in minutes based on route speed and road constraints
       let travelMinutes = 0;
-      if (stopIdx > 0) {
+      if (stopIdx === 0) {
+        // Distance from depot to first stop
+        travelMinutes = Math.max(5, Math.round((travelDistance / avgSpeedKmH) * 60));
+      } else {
         if (travelDistance < 0.05) {
           travelMinutes = 0; // Same building/cluster
         } else {
-          travelMinutes = Math.max(3, Math.round((travelDistance / 30) * 60));
+          travelMinutes = Math.max(3, Math.round((travelDistance / avgSpeedKmH) * 60));
         }
+      }
+
+      if (avoidSmallRoads && travelDistance >= 0.05) {
+        travelMinutes += 2; // small road navigation buffer
       }
 
       currentTime += travelMinutes;
@@ -182,7 +258,6 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
     });
 
     // Add trip back to depot distance
-    const depotCoords = { lat: -6.173256, lng: 106.810058 }; // Cideng depot
     const returnDist = Math.round(haversineKm(prevCoords.lat, prevCoords.lng, depotCoords.lat, depotCoords.lng) * 10) / 10;
     runTotalDistance += returnDist;
 
@@ -191,7 +266,7 @@ export function solveVRP(request: RoutePlanRequest): RunsheetResponse {
     const jenisTrip = hasBag ? "Dengan Bag" : "Tanpa Bag";
 
     // Total duration calculation
-    const totalDurationMins = stops.length * 15 + Math.round((runTotalDistance / 30) * 60);
+    const totalDurationMins = stops.length * 15 + Math.round((runTotalDistance / avgSpeedKmH) * 60);
 
     globalTotalDistance += runTotalDistance;
     globalTotalCassettes += runTotalCassettes;
